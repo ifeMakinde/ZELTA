@@ -1,111 +1,232 @@
-# bayesian/engine.py
-
 from typing import Dict
-import scipy.stats as stats # Matches architecture spec
 
-class ZeltaBayesianEngine:
+
+class QueloBayesianEngine:
     """
-    Adjusts market probability using formal Bayesian inference.
-    Posterior Odds = Prior Odds * Likelihood Ratio (derived from bias/stress).
+    Adjusts Bayse crowd probability using formal Bayesian inference.
+
+    Core logic:
+    Posterior Odds = Prior Odds × Likelihood Ratio
+
+    The Likelihood Ratio is derived from the active behavioral bias.
+    A biased crowd = distorted signal = QUELO corrects it.
+
+    Output feeds into kelly/allocator.py and brain/pipeline.py.
     """
 
-    def __init__(self, base_rate_prior: float = 0.5):
-        """
-        base_rate_prior = Historical probability before current panic (Bayse base rate)
-        """
-        self.base_rate_prior = base_rate_prior
+    # Minimum edge to trigger a BUY or SAVE verdict
+    EDGE_THRESHOLD = 0.05
 
-    def compute_likelihood_ratio(self, bias: str, stress_score: int) -> float:
+    # Probability thresholds for verdict
+    INVEST_THRESHOLD = 0.55
+    SAVE_THRESHOLD = 0.45
+
+    def compute_likelihood_ratio(
+        self,
+        bias: str,
+        stress_score: int,
+    ) -> float:
         """
-        Determine how much the current bias is distorting the crowd's signal.
-        LR > 1 amplifies the prior (validates), LR < 1 discounts the crowd's panic.
+        How much is the current bias distorting the Bayse crowd signal?
+
+        LR < 1 = crowd is overestimating risk (discount their panic)
+        LR = 1 = crowd is rational (trust them)
+        LR > 1 = crowd is underestimating risk (amplify the signal)
         """
         stress_factor = stress_score / 100.0
 
-        # Loss Aversion/Panic -> Crowd is overestimating risk -> Discount the evidence
-        if bias in ["Loss Aversion", "Panic Selling"]:
+        if bias in ("Loss Aversion", "Panic Selling"):
+            # Crowd is irrationally fearful — discount their signal
+            # High stress = more discounting
             return max(0.2, 1.0 - (0.8 * stress_factor))
 
-        # Overconfidence/Present Bias -> Crowd is underestimating risk -> Inflate the evidence
-        elif bias in ["Overconfidence", "Present Bias"]:
+        elif bias in ("Overconfidence", "Present Bias"):
+            # Crowd is irrationally optimistic — amplify risk signal
             return min(3.0, 1.0 + (2.0 * stress_factor))
 
-        # Herd Behavior -> Mild discounting due to unverified momentum
         elif bias == "Herd Behavior":
+            # Following momentum without analysis — mild discount
             return max(0.5, 1.0 - (0.4 * stress_factor))
 
-        # Rational/Calm -> Trust the crowd (LR = 1.0)
+        elif bias == "Mental Accounting":
+            # Treating money differently — slight discount
+            return max(0.7, 1.0 - (0.2 * stress_factor))
+
+        # Rational — trust the crowd
         return 1.0
 
     def adjust_probability(
         self,
         market_prob: float,
         bias: str,
-        stress_score: int
+        stress_score: int,
     ) -> float:
         """
-        Bayesian update: convert to odds, apply likelihood ratio, convert back.
+        Full Bayesian update:
+        1. Convert Bayse crowd probability → odds
+        2. Apply likelihood ratio (behavioral correction)
+        3. Convert posterior odds → rational probability
         """
-        # 1. Convert Bayse Crowd Probability to Odds
-        # Avoid division by zero
+        # Clamp to avoid division by zero
         market_prob = max(0.01, min(0.99, market_prob))
+
+        # Step 1 — Prior odds from Bayse crowd
         prior_odds = market_prob / (1.0 - market_prob)
 
-        # 2. Calculate Likelihood Ratio based on behavioral distortion
+        # Step 2 — Likelihood ratio from behavioral bias
         lr = self.compute_likelihood_ratio(bias, stress_score)
 
-        # 3. Calculate Posterior Odds
+        # Step 3 — Posterior odds
         posterior_odds = prior_odds * lr
 
-        # 4. Convert back to Rational Probability (Posterior)
+        # Step 4 — Convert back to probability
         rational_prob = posterior_odds / (1.0 + posterior_odds)
 
-        return rational_prob
+        return round(max(0.01, min(0.99, rational_prob)), 3)
 
-    def compute_edge(self, market_prob: float, rational_prob: float) -> float:
+    def compute_edge(
+        self,
+        market_prob: float,
+        rational_prob: float,
+    ) -> float:
         """
-        Edge = Confidence in outcome (difference between rational belief and market belief)
+        Edge = gap between rational belief and crowd belief.
+        Positive edge = crowd is too fearful = opportunity.
+        Negative edge = crowd is too optimistic = caution.
         """
-        return rational_prob - market_prob
+        return round(rational_prob - market_prob, 3)
 
     def confidence_level(self, edge: float) -> str:
         abs_edge = abs(edge)
-        if abs_edge < 0.05:
-            return "Low"
-        elif abs_edge < 0.15:
+        if abs_edge >= 0.20:
+            return "Very High"
+        elif abs_edge >= 0.15:
+            return "High"
+        elif abs_edge >= 0.05:
             return "Medium"
         else:
-            return "High"
+            return "Low"
 
-    def decide(self, edge: float, rational_prob: float) -> str:
+    def decide(
+        self,
+        edge: float,
+        rational_prob: float,
+        stress_score: int,
+    ) -> str:
         """
-        Outputs exact verdict string
+        QUELO three-verdict system: INVEST / SAVE / HOLD
+
+        INVEST: rational model says positive outcome is likely
+                AND there is meaningful edge vs crowd
+        SAVE:   rational model says negative outcome is likely
+                AND there is meaningful edge (crowd too optimistic)
+        HOLD:   edge is too small to act on, or stress is extreme
         """
-        if rational_prob > 0.55 and edge > 0.05:
-            return "INVEST"
-        elif rational_prob < 0.45 and edge < -0.05:
-            return "SAVE"
-        else:
+        # In CRISIS — always HOLD, protect capital first
+        if stress_score >= 80:
             return "HOLD"
 
-    def run(self, stress_data: Dict, bias_data: Dict) -> Dict:
-        market_prob = stress_data["components"]["market_probability"]
-        stress_score = stress_data["stress_score"]
-        bias = bias_data["bias"]
+        if (
+            rational_prob >= self.INVEST_THRESHOLD
+            and edge >= self.EDGE_THRESHOLD
+        ):
+            return "INVEST"
 
-        rational_prob = self.adjust_probability(market_prob, bias, stress_score)
+        elif (
+            rational_prob <= self.SAVE_THRESHOLD
+            and edge <= -self.EDGE_THRESHOLD
+        ):
+            return "SAVE"
+
+        return "HOLD"
+
+    def get_plain_english(
+        self,
+        verdict: str,
+        edge: float,
+        market_prob: float,
+        rational_prob: float,
+        bias: str,
+    ) -> str:
+        """Plain English explanation for BQ Co-Pilot"""
+        crowd_pct = round(market_prob * 100)
+        rational_pct = round(rational_prob * 100)
+        edge_pct = round(abs(edge) * 100)
+
+        if verdict == "INVEST":
+            return (
+                f"The Bayse crowd is pricing {crowd_pct}% probability. "
+                f"QUELO's Bayesian model says {rational_pct}%. "
+                f"That {edge_pct}% gap means the crowd is more fearful than the data warrants. "
+                f"Active bias: {bias}. QUELO recommends: INVEST."
+            )
+        elif verdict == "SAVE":
+            return (
+                f"The Bayse crowd is pricing {crowd_pct}% probability. "
+                f"QUELO's model says {rational_pct}%. "
+                f"The crowd is {edge_pct}% too optimistic given your situation. "
+                f"Active bias: {bias}. QUELO recommends: SAVE — protect your capital."
+            )
+        else:
+            return (
+                f"The gap between crowd pricing ({crowd_pct}%) "
+                f"and QUELO model ({rational_pct}%) is too small to act on confidently. "
+                f"Active bias: {bias}. QUELO recommends: HOLD for now."
+            )
+
+    def run(
+        self,
+        stress_data: Dict,
+        bias_data: Dict,
+    ) -> Dict:
+        """
+        Main entry point called by brain/pipeline.py.
+
+        Args:
+            stress_data: Output from stress/index.py
+            bias_data:   Output from bias/detector.py
+
+        Returns:
+            Bayesian analysis dict consumed by kelly/allocator.py
+        """
+        # Safe key access — consistent with stress/index.py output
+        score = stress_data.get("score", 50)
+        market_prob = stress_data.get(
+            "components", {}
+        ).get("market_probability", 0.5)
+        bias = bias_data.get("bias", "Rational")
+
+        rational_prob = self.adjust_probability(market_prob, bias, score)
         edge = self.compute_edge(market_prob, rational_prob)
+        verdict = self.decide(edge, rational_prob, score)
+        confidence = self.confidence_level(edge)
 
         return {
             "market_probability": round(market_prob, 3),
-            "rational_probability": round(rational_prob, 3),
-            "edge": round(edge, 3),
-            "confidence": self.confidence_level(edge),
-            "decision": self.decide(edge, rational_prob)
+            "rational_probability": rational_prob,
+            "edge": edge,
+            "confidence": confidence,
+            "verdict": verdict,
+            "plain_english": self.get_plain_english(
+                verdict, edge, market_prob, rational_prob, bias
+            ),
+            # For Kelly allocator
+            "win_probability": rational_prob,
+            "bias_applied": bias,
+            "stress_score": score,
         }
 
-# --- PIPELINE ENTRY POINT ---
+
+# ── PIPELINE ENTRY POINT ──────────────────────────────────────────────────────
+
 def run_bayesian_engine(stress_data: Dict, bias_data: Dict) -> Dict:
-    engine = ZeltaBayesianEngine()
+    """Called by brain/pipeline.py"""
+    engine = QueloBayesianEngine()
     result = engine.run(stress_data, bias_data)
+    print(
+        f"[QUELO Bayesian] Market: {result['market_probability']} "
+        f"→ Rational: {result['rational_probability']} "
+        f"| Edge: {result['edge']} "
+        f"| Verdict: {result['verdict']}"
+    )
     return result
