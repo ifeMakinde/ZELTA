@@ -1,0 +1,23 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# HuggingFace model cache (large — already baked into Docker)
+.cache/
+~/.cache/huggingface/
+
+# PyCharm
+.idea/
+
+# Node (frontend — separate deployment)
+node_modules/
+.next/

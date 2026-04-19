@@ -7,7 +7,7 @@ import base64
 import httpx
 import urllib.parse
 
-from zelta_ai.config.settings import settings
+from config.settings import settings
 from .ws import BayseWebSocket
 
 

@@ -106,7 +106,8 @@ class ZeltaPipeline:
             # ── 6. CONFIDENCE ──────────────────────────────
             confidence_data = run_confidence_scorer(
                 bayesian_data,
-                stress_data
+                stress_data,
+                bias_data,
             )
 
             # ── 7. KELLY ───────────────────────────────────
