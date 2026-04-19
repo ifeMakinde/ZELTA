@@ -4,7 +4,10 @@ import PageHeader from "@/components/PageHeader";
 function page() {
   return (
     <section>
-      <PageHeader title="Wallet" description="Unified view of your finances" />
+      <PageHeader
+        title="ZELTA WALLET"
+        description="Unified view of your finances"
+      />
     </section>
   );
 }

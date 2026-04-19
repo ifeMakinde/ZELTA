@@ -7,9 +7,9 @@ export default function SignUpForm() {
   const [password, setPassword] = useState("");
 
   return (
-    <section className="max-w-250 mx-auto p-6 rounded-xl flex flex-col justify-center items-between  pt-2 ">
+    <section className=" w-[80%] md:w-[50%] lg:w-[40%] xl:w-[25%] mx-auto p-6 rounded-xl flex flex-col justify-center items-between  pt-2 ">
       <h1 className="text-[22px] font-semibold mb-4 text-center">
-        Create Account
+        Create An Account
       </h1>
 
       <form
