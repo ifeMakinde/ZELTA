@@ -1,5 +1,5 @@
 import asyncio
-from brain.bayse.client import BayseClient
+from zelta_ai.brain import BayseClient
 
 
 async def test_websocket():
