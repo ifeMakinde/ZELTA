@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import PageHeader from "@/components/PageHeader"; 
-import dashboard from "@/app/dashboard/dashboard";
+import Dashboard from "@/app/dashboard/dashboard";
 
 const time = new Date().toLocaleString("en-US", {
   hour: "numeric",
@@ -18,7 +18,7 @@ function Page() {
         description="here's your financial intelligence for today"
       />
  <Suspense fallback={<div>Loading dashboard...</div>}>
-        <dashboard/>
+        <Dashboard/>
         </Suspense>
  </section>
   );
