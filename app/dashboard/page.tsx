@@ -1,6 +1,6 @@
 "use client";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react",
+import { Suspense } from "react";
 import PageHeader from "@/components/PageHeader";
 import Widget from "@/components/widget";
 import {
