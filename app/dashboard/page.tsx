@@ -1,5 +1,6 @@
 "use client";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react",
 import PageHeader from "@/components/PageHeader";
 import Widget from "@/components/widget";
 import {
@@ -22,6 +23,8 @@ function Page() {
   const searchParam = useSearchParams();
   const name = searchParam.get("username");
   return (
+
+
     <section className="space-y-6">
       {/*  PAGE HEADER */}
       <PageHeader
@@ -29,6 +32,8 @@ function Page() {
         description="here's your financial intelligence for today"
       />
 
+        <Suspense fallback={<div>Loading dashboard...</div>}>
+      
       {/*  DASHBOARD HOMEPAGE WIWDGET 3 */}
       {/* Add dashboard widgets and cards here. The dashboard layout splits sidebar 30% / content 70%. */}
       <Widget className="w-full p-3 lg:pl-10 rounded-2xl bg-orange-50 flex items-center gap-3 text-[#444]">
@@ -227,7 +232,9 @@ function Page() {
           </Button>
         </div>
       </Widget>
+      </Suspense>
     </section>
+    
   );
 }
 
