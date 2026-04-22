@@ -1,8 +1,15 @@
 import { Suspense } from "react";
 import PageHeader from "@/components/PageHeader"; 
-import dashboard from "/dashboard"
-function Page() {
+import dashboard from "/Dashboard"
 
+const time = new Date().toLocaleString("en-US", {
+  hour: "numeric",
+  minute: "numeric",
+  hour12: true,
+});
+
+
+function Page() {
   return (
 <section className="space-y-6">
       {/*  PAGE HEADER */}
@@ -10,17 +17,10 @@ function Page() {
         title={`${time.includes("AM") ? "Good Morning" : "Good Evening"},\n ${name}`}
         description="here's your financial intelligence for today"
       />
-
-      <Suspense fallback={<div>Loading dashboard...</div>}>
+ <Suspense fallback={<div>Loading dashboard...</div>}>
+        <dashboard/>
         </Suspense>
-
-    
-      
-      
-          
-    </section>
-  
-    
+ </section>
   );
 }
 
