@@ -11,6 +11,7 @@ import "./globals.css";
 
 const openSans = Open_Sans({
   subsets: ["latin"],
+  display: "swap",
   variable: "--font-open-sans",
 });
 
