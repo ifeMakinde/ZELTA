@@ -5,6 +5,7 @@ import LoginForm from "./LoginForm";
 import SignUpForm from "./SignUpForm";
 
 export default function AuthPage() {
+  // add google auth later and remove default state login. maybe diffrent pages instead of components
   const [isLogin, setIsLogin] = useState(true);
 
   return (

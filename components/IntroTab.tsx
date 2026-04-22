@@ -56,6 +56,7 @@ export default function Home() {
     }
     if (current?.buttonText === "Get Started") {
       navigate.push("/auth");
+      console.log("buttton triggered");
     }
   };
 
@@ -74,7 +75,7 @@ export default function Home() {
 
             <Button
               onClick={handleButtonClick}
-              className="mt-6 rounded-xl w-[80%] bg-green-800 text-white px-8 py-2 hover:bg-green-900 text-[14px]"
+              className="mt-6 rounded-xl w-[80%] bg-[#0b825a] text-white px-8 py-2 hover:bg-[#0a6f4d] text-[14px]"
             >
               {current.buttonText}
             </Button>

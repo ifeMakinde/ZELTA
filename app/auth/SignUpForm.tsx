@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Button from "@/components/Button";
 
 export default function SignUpForm() {
   //   const [name, setName] = useState("");
@@ -42,12 +43,9 @@ export default function SignUpForm() {
           />
         </label>
 
-        <button
-          type="submit"
-          className="w-full rounded-xl bg-green-800 text-white px-4 py-2 hover:bg-green-900"
-        >
+        <Button className="w-full rounded-xl bg-[#10b981] text-white px-4 py-2 hover:bg-[#0b825a]">
           Sign Up
-        </button>
+        </Button>
       </form>
     </section>
   );

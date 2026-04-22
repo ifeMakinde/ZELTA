@@ -8,7 +8,7 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
 
   return (
-    <section className=" w-[80%] md:w-[50%] lg:w-[40%] xl:w-[25%] mx-auto p-6 rounded-xl flex flex-col justify-center items-between  pt-2 ">
+    <section className=" w-full md:w-[50%] lg:w-[40%] xl:w-[25%] mx-auto p-6 rounded-xl flex flex-col justify-center items-between  pt-2 ">
       <h1 className="text-[22px] font-semibold mb-4 text-center ">
         Welcome Back!
       </h1>
@@ -50,8 +50,8 @@ export default function LoginForm() {
         </label>
 
         <button
-          type="submit"
-          className="rounded-xl bg-green-800 text-white px-6 py-2 hover:bg-green-900"
+          // type="submit"
+          className="rounded-xl bg-[#10b981] text-white px-6 py-2 hover:bg-[#0b825a]"
         >
           Continue
         </button>
