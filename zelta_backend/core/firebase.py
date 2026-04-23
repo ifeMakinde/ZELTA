@@ -2,7 +2,8 @@ import os
 import logging
 from typing import Any
 import firebase_admin
-from firebase_admin import credentials, firestore, auth
+from firebase_admin import credentials,auth
+from google.cloud.firestore import Client
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ def initialize_firebase() -> None:
         _firestore_client = firestore.client()
 
 
-def get_firestore() -> firestore.Client:
+def get_firestore() -> Client: # Use the imported Client type here
     """Return the Firestore client, initializing Firebase if necessary."""
     global _firestore_client
     if _firestore_client is None:
