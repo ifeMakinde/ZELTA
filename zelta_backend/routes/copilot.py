@@ -36,11 +36,14 @@ async def ask_copilot(
         try:
             brain = await get_intelligence(db, uid)
             brain_context = {
-                "stress": brain.stress.model_dump(),
-                "bias": brain.bias.model_dump(),
-                "allocation": brain.allocation.model_dump(),
-                "decision_score": brain.decision_score,
-                "bayse_vs_model_gap": brain.bayse_vs_model_gap,
+                "stress":      brain.stress.model_dump(),
+                "bias":        brain.bias.model_dump(),
+                "decision":    brain.decision.model_dump(),
+                "confidence":  brain.confidence.model_dump(),
+                "allocation":  brain.allocation.model_dump(),
+                "score":       brain.score.model_dump(),
+                "bayse":       brain.bayse.model_dump(),
+                "explanation": brain.explanation.model_dump(),
             }
         except Exception as e:
             logger.warning(f"Brain context load failed for copilot: {e}")

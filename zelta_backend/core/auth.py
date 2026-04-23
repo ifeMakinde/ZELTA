@@ -1,79 +1,54 @@
-# core/auth.py
-
-from typing import Optional, Dict, Any
-
-from fastapi import Request, HTTPException, status, Depends
 from firebase_admin import auth
+from fastapi import HTTPException, status
+from core.firebase import get_auth
+import logging
 
-from zelta_backend.core.firebase import FirebaseClient
+logger = logging.getLogger(__name__)
 
 
-class AuthService:
+def verify_firebase_token(token: str) -> dict:
     """
-    Handles Firebase Authentication verification.
+    Verify a Firebase ID token and return the decoded claims.
+
+    Returns a dict with: uid, email, name, picture, email_verified
+    Raises HTTPException 401 if token is invalid or expired.
     """
-
-    def __init__(self):
-        self.firebase = FirebaseClient()
-
-    # ─────────────────────────────────────────────
-
-    def _extract_token(self, request: Request) -> str:
-        """
-        Extract Bearer token from Authorization header
-        """
-        auth_header: Optional[str] = request.headers.get("Authorization")
-
-        if not auth_header or not auth_header.startswith("Bearer "):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid Authorization header",
-            )
-
-        return auth_header.split(" ")[1]
-
-    # ─────────────────────────────────────────────
-
-    def verify_token(self, token: str) -> Dict[str, Any]:
-        """
-        Verify Firebase ID token
-        """
-        try:
-            decoded_token = auth.verify_id_token(token)
-            return decoded_token
-
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
-            )
-
-    # ─────────────────────────────────────────────
-
-    def get_current_user(self, request: Request) -> Dict[str, Any]:
-        """
-        Full auth flow:
-        - Extract token
-        - Verify token
-        - Return user payload
-        """
-        token = self._extract_token(request)
-        decoded = self.verify_token(token)
+    try:
+        firebase_auth = get_auth()
+        decoded_token = firebase_auth.verify_id_token(token, check_revoked=True)
 
         return {
-            "uid": decoded.get("uid"),
-            "email": decoded.get("email"),
-            "name": decoded.get("name"),
-            "picture": decoded.get("picture"),
+            "uid": decoded_token.get("uid"),
+            "email": decoded_token.get("email", ""),
+            "name": decoded_token.get("name", ""),
+            "picture": decoded_token.get("picture", ""),
+            "email_verified": decoded_token.get("email_verified", False),
         }
 
-
-# ─────────────────────────────────────────────
-# FastAPI Dependency (THIS IS WHAT YOU USE)
-# ─────────────────────────────────────────────
-
-auth_service = AuthService()
-
-
-def get_current_user(request: Request):
-    return auth_service.get_current_user(request)
+    except firebase_admin.auth.RevokedIdTokenError:
+        logger.warning("Revoked Firebase token presented.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except firebase_admin.auth.ExpiredIdTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except firebase_admin.auth.InvalidIdTokenError as e:
+        logger.warning(f"Invalid Firebase token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
+        logger.error(f"Token verification error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

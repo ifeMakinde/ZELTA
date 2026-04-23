@@ -1,65 +1,31 @@
-# core/dependencies.py
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from core.auth import verify_firebase_token
+from core.firebase import get_firestore
+from google.cloud import firestore
+from typing import Annotated
+import logging
 
-from fastapi import Depends, Request
-from typing import Dict, Any
+logger = logging.getLogger(__name__)
 
-from core.auth import get_current_user
-from core.firebase import FirebaseClient
+bearer_scheme = HTTPBearer(auto_error=True)
 
 
-# ─────────────────────────────────────────────
-# FIREBASE / DATABASE
-# ─────────────────────────────────────────────
-
-def get_db():
+def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)]
+) -> dict:
     """
-    Firestore database dependency.
-    Ensures singleton usage via FirebaseClient.
+    Extract and verify Firebase token from Authorization header.
+    Returns current_user dict: { uid, email, name, picture, email_verified }
     """
-    firebase = FirebaseClient()
-    return firebase.get_firestore()
+    token = credentials.credentials
+    return verify_firebase_token(token)
 
 
-# ─────────────────────────────────────────────
-# AUTH
-# ─────────────────────────────────────────────
-
-def get_user(user: Dict[str, Any] = Depends(get_current_user)):
-    """
-    Returns full authenticated user object.
-    """
-    return user
+def get_db() -> firestore.Client:
+    """Provide the Firestore client as a FastAPI dependency."""
+    return get_firestore()
 
 
-def get_user_id(user: Dict[str, Any] = Depends(get_current_user)) -> str:
-    """
-    Shortcut: directly inject user UID.
-    """
-    return user["uid"]
-
-
-# ─────────────────────────────────────────────
-# OPTIONAL: REQUEST CONTEXT
-# ─────────────────────────────────────────────
-
-def get_request_id(request: Request) -> str:
-    """
-    Extract request ID if you add one later (for logging/tracing).
-    Falls back to None.
-    """
-    return request.headers.get("X-Request-ID", "")
-
-
-def get_user_context(
-    user: Dict[str, Any] = Depends(get_current_user),
-    request: Request = None,
-) -> Dict[str, Any]:
-    """
-    Combined context (useful for logging, analytics, AI input later)
-    """
-    return {
-        "uid": user.get("uid"),
-        "email": user.get("email"),
-        "ip": request.client.host if request else None,
-        "user_agent": request.headers.get("User-Agent") if request else None,
-    }
+CurrentUser = Annotated[dict, Depends(get_current_user)]
+DB = Annotated[firestore.Client, Depends(get_db)]

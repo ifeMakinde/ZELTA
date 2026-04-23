@@ -1,78 +1,54 @@
-import os
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
+from config.settings import settings
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+_firebase_app = None
+_firestore_client = None
 
 
-class FirebaseClient:
-    """
-    Singleton Firebase client.
+def initialize_firebase() -> None:
+    """Initialize Firebase Admin SDK. Safe to call multiple times."""
+    global _firebase_app, _firestore_client
 
-    Handles:
-    - App initialization
-    - Firestore access
-    - Environment-aware auth (local vs cloud)
-    """
+    if _firebase_app is not None:
+        return
 
-    _instance = None
-    _app = None
-    _db = None
+    try:
+        service_account_path = settings.firebase_service_account_path
 
-    def __new__(cls):
-        """
-        Ensure only one instance exists (Singleton pattern)
-        """
-        if cls._instance is None:
-            cls._instance = super(FirebaseClient, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self):
-        """
-        Initialize Firebase only once
-        """
-        if self._app:
-            return
-
-        self._initialize_app()
-        self._initialize_db()
-
-    # ─────────────────────────────────────────────
-
-    def _initialize_app(self):
-        """
-        Initialize Firebase app
-        """
-        firebase_key_path = os.getenv("FIREBASE_CREDENTIALS")
-
-        # ── Local development (JSON key) ──
-        if firebase_key_path and os.path.exists(firebase_key_path):
-            cred = credentials.Certificate(firebase_key_path)
-
-        # ── Cloud Run / Vertex (ADC) ──
+        if os.path.exists(service_account_path):
+            cred = credentials.Certificate(service_account_path)
+            _firebase_app = firebase_admin.initialize_app(cred, {
+                "projectId": settings.firebase_project_id,
+            })
         else:
-            cred = credentials.ApplicationDefault()
+            # Use Application Default Credentials (for Cloud Run)
+            _firebase_app = firebase_admin.initialize_app(options={
+                "projectId": settings.firebase_project_id,
+            })
 
-        self._app = firebase_admin.initialize_app(cred)
+        _firestore_client = firestore.client()
+        logger.info("Firebase initialized successfully.")
 
-    # ─────────────────────────────────────────────
-
-    def _initialize_db(self):
-        """
-        Initialize Firestore client
-        """
-        self._db = firestore.client()
-
-    # ─────────────────────────────────────────────
-
-    def get_db(self):
-        """
-        Get Firestore client
-        """
-        return self._db
+    except Exception as e:
+        logger.error(f"Firebase initialization failed: {e}")
+        raise
 
 
-# ─────────────────────────────────────────────
-# Convenience accessor (clean imports)
-# ─────────────────────────────────────────────
+def get_firestore() -> firestore.Client:
+    """Return the Firestore client, initializing Firebase if necessary."""
+    global _firestore_client
+    if _firestore_client is None:
+        initialize_firebase()
+    return _firestore_client
 
-def get_firestore():
-    return FirebaseClient().get_db()
+
+def get_auth() -> auth:
+    """Return Firebase Auth module."""
+    if _firebase_app is None:
+        initialize_firebase()
+    return auth

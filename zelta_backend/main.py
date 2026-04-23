@@ -1,109 +1,106 @@
-import os
+"""
+ZELTA Backend — Behavioral Quantitative Financial Intelligence
+FastAPI + Firebase + Vertex AI
+
+Entry point: initializes Firebase, registers all routes, and starts the server.
+"""
+
+import logging
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-# Routes
-from routes.intelligence import router as intelligence_router
-from routes.wallet       import router as wallet_router
-from routes.simulation   import router as simulation_router
-from routes.copilot      import router as copilot_router
-from routes.portfolio    import router as portfolio_router
-from routes.profile      import router as profile_router
+from core.firebase import initialize_firebase
+from middleware.cors import setup_cors
+from routes import intelligence, wallet, simulation, copilot, portfolio, profile
 
-# Config
-from config.settings import settings
-
-DEBUG = settings.DEBUG
-PORT  = settings.PORT
+# ─── Logging ──────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
-# ── Lifespan ──────────────────────────────────────────────────────────────────
+# ─── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Startup: verify AI Brain is reachable.
-    Shutdown: clean up connections.
-    """
-    print("[ZELTA Backend] Starting up...")
-    print(f"[ZELTA Backend] AI Brain URL: {settings.AI_BRAIN_URL}")
-    print(f"[ZELTA Backend] Debug mode:   {DEBUG}")
-
-    # Quick brain health check on startup
-    try:
-        import httpx
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(f"{settings.AI_BRAIN_URL}/")
-            if r.status_code == 200:
-                print("[ZELTA Backend] ✅ AI Brain connected")
-            else:
-                print(f"[ZELTA Backend] ⚠️ AI Brain returned {r.status_code}")
-    except Exception as e:
-        print(f"[ZELTA Backend] ⚠️ AI Brain not reachable: {e}")
-        print("[ZELTA Backend] Will retry on first request")
-
+    """Initialize Firebase on startup."""
+    logger.info("ZELTA Backend starting up...")
+    initialize_firebase()
+    logger.info("Firebase initialized. BQ Brain ready.")
     yield
+    logger.info("ZELTA Backend shutting down.")
 
-    print("[ZELTA Backend] Shutting down...")
 
-
-# ── App ───────────────────────────────────────────────────────────────────────
+# ─── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="ZELTA Backend API",
-    description="Behavioral Quantitative Financial Intelligence — Backend",
+    title="ZELTA Backend",
+    description=(
+        "Behavioral Quantitative Financial Intelligence for Nigerian university students. "
+        "Powered by Bayse Markets crowd intelligence, Bayesian inference, and Kelly Criterion allocation."
+    ),
     version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan,
-    docs_url="/docs" if DEBUG else None,
-    redoc_url=None,
 )
 
+# ─── Middleware ────────────────────────────────────────────────────────────────
+setup_cors(app)
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Tighten after hackathon
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# ── Routes ────────────────────────────────────────────────────────────────────
-app.include_router(intelligence_router)
-app.include_router(wallet_router)
-app.include_router(simulation_router)
-app.include_router(copilot_router)
-app.include_router(portfolio_router)
-app.include_router(profile_router)
+# ─── Routes ───────────────────────────────────────────────────────────────────
+app.include_router(intelligence.router)
+app.include_router(wallet.router)
+app.include_router(simulation.router)
+app.include_router(copilot.router)
+app.include_router(portfolio.router)
+app.include_router(profile.router)
 
 
-# ── Root ──────────────────────────────────────────────────────────────────────
-@app.get("/")
-def root():
+# ─── Health Check ─────────────────────────────────────────────────────────────
+@app.get("/", tags=["Health"])
+async def root():
     return {
-        "service":    "ZELTA Backend API",
-        "status":     "running",
-        "version":    "1.0.0",
-        "brain_url":  settings.AI_BRAIN_URL,
-        "debug":      DEBUG,
-    }
-
-
-@app.get("/health")
-def health():
-    return {
-        "status":  "ok",
         "service": "ZELTA Backend",
+        "version": "1.0.0",
+        "status": "operational",
+        "description": "Behavioral Quantitative Financial Intelligence",
+        "powered_by": ["Bayse Markets", "Gemini Pro", "Vertex AI", "FastAPI"],
     }
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+@app.get("/health", tags=["Health"])
+async def health():
+    return JSONResponse(
+        status_code=200,
+        content={"status": "healthy", "service": "zelta-backend"},
+    )
+
+
+# ─── Global Exception Handler ─────────────────────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception on {request.url}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "message": "An unexpected error occurred.",
+            "detail": str(exc),
+        },
+    )
+
+
+# ─── Dev Server ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
+    from config.settings import settings
+
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=PORT,
-        reload=DEBUG,
+        host=settings.app_host,
+        port=settings.app_port,
+        reload=settings.app_env == "development",
+        log_level="info",
     )
