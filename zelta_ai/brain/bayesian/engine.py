@@ -9,7 +9,7 @@ class ZeltaBayesianEngine:
     Posterior Odds = Prior Odds × Likelihood Ratio
 
     The Likelihood Ratio is derived from the active behavioral bias.
-    A biased crowd = distorted signal = QUELO corrects it.
+    A biased crowd = distorted signal = ZELTA corrects it.
 
     Output feeds into kelly/allocator.py and brain/pipeline.py.
     """
@@ -114,7 +114,7 @@ class ZeltaBayesianEngine:
         stress_score: int,
     ) -> str:
         """
-        QUELO three-verdict system: INVEST / SAVE / HOLD
+        ZELTA three-verdict system: INVEST / SAVE / HOLD
 
         INVEST: rational model says positive outcome is likely
                 AND there is meaningful edge vs crowd
@@ -158,20 +158,20 @@ class ZeltaBayesianEngine:
                 f"The Bayse crowd is pricing {crowd_pct}% probability. "
                 f"QUELO's Bayesian model says {rational_pct}%. "
                 f"That {edge_pct}% gap means the crowd is more fearful than the data warrants. "
-                f"Active bias: {bias}. QUELO recommends: INVEST."
+                f"Active bias: {bias}. ZELTA recommends: INVEST."
             )
         elif verdict == "SAVE":
             return (
                 f"The Bayse crowd is pricing {crowd_pct}% probability. "
                 f"QUELO's model says {rational_pct}%. "
                 f"The crowd is {edge_pct}% too optimistic given your situation. "
-                f"Active bias: {bias}. QUELO recommends: SAVE — protect your capital."
+                f"Active bias: {bias}. ZELTA recommends: SAVE — protect your capital."
             )
         else:
             return (
                 f"The gap between crowd pricing ({crowd_pct}%) "
-                f"and QUELO model ({rational_pct}%) is too small to act on confidently. "
-                f"Active bias: {bias}. QUELO recommends: HOLD for now."
+                f"and ZELTA model ({rational_pct}%) is too small to act on confidently. "
+                f"Active bias: {bias}. ZELTA recommends: HOLD for now."
             )
 
     def run(
@@ -224,7 +224,7 @@ def run_bayesian_engine(stress_data: Dict, bias_data: Dict) -> Dict:
     engine = ZeltaBayesianEngine()
     result = engine.run(stress_data, bias_data)
     print(
-        f"[QUELO Bayesian] Market: {result['market_probability']} "
+        f"[ZELTA Bayesian] Market: {result['market_probability']} "
         f"→ Rational: {result['rational_probability']} "
         f"| Edge: {result['edge']} "
         f"| Verdict: {result['verdict']}"

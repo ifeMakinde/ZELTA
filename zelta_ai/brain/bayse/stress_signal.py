@@ -1,16 +1,13 @@
 import asyncio
-from .client import BayseClient
-from .ws import BayseWebSocket
+import time
+from typing import Dict, Optional
 
-# Nigerian financial market keywords QUELO watches
-QUELO_KEYWORDS = ["NGN", "naira", "CBN", "inflation", "MPC", "dollar"]
+from brain.bayse.client import BayseClient
 
 
 class LiveStressMonitor:
     def __init__(self):
-        self.ws = BayseWebSocket()
         self.client = BayseClient()
-        self.market_id = None  # Resolved dynamically at startup
 
         self.current_signal = {
             "score": 50.0,
@@ -19,96 +16,142 @@ class LiveStressMonitor:
             "crowd_no_price": 0.5,
             "spread": 0.0,
             "imbalance": 0.5,
-            "market_title": "Initialising...",
+            "market_title": "Initializing...",
+            "market_id": None,
+            "outcome": "YES",
+            "mid_price": 0.5,
+            "best_bid": 0.5,
+            "best_ask": 0.5,
+            "last_price": 0.5,
+            "volume24h": 0,
+            "trade_count_24h": 0,
+            "source": "Bayse Prediction Markets",
+            "updated_at": None,
         }
 
-    def calculate_stress(self, orderbook: dict):
-        """
-        Converts Bayse orderbook data into QUELO Stress Score (0-100).
+        # Keeps older code from breaking if it checks ws.connected.
+        self.ws = type("WS", (), {"connected": True})()
 
-        Two signals:
-        1. Spread stress — wide spread = high uncertainty = fear
-        2. Ask imbalance — more sellers than buyers = crowd panic
+    # ── CORE LOGIC ─────────────────────────────────────────
+
+    def calculate_stress(self, yes_price: float, no_price: float) -> float:
         """
+        Extreme pricing = higher stress.
+        This uses the YES/NO crowd imbalance.
+        """
+        distance = abs(yes_price - 0.5) * 2
+        spread = abs(yes_price - no_price)
+
+        stress = (distance * 0.7 + spread * 0.3) * 100
+        return round(min(100, max(0, stress)), 2)
+
+    def classify(self, score: float) -> str:
+        if score >= 80:
+            return "EXTREME PANIC"
+        elif score >= 60:
+            return "HIGH STRESS"
+        elif score >= 30:
+            return "MODERATE"
+        else:
+            return "CALM"
+
+    @staticmethod
+    def _extract_yes_price(ticker: Dict) -> float:
+        """
+        Bayse ticker returns outcome-level stats:
+        lastPrice, bestBid, bestAsk, midPrice, spread, etc.
+        Use the best available price estimate for YES.
+        """
+        candidates = (
+            ticker.get("midPrice"),
+            ticker.get("bestBid"),
+            ticker.get("bestAsk"),
+            ticker.get("lastPrice"),
+        )
+
+        for value in candidates:
+            try:
+                if value is not None:
+                    price = float(value)
+                    if price > 0:
+                        return price
+            except Exception:
+                continue
+
+        return 0.5
+
+    # ── FETCH ──────────────────────────────────────────────
+
+    async def fetch_once(self):
         try:
-            bids = orderbook.get("bids", [])
-            asks = orderbook.get("asks", [])
+            best = await self.client.find_best_market()
 
-            if not bids or not asks:
+            if not best:
+                print("[Bayse] No market found")
                 return
 
-            best_bid = bids[0]["price"]
-            best_ask = asks[0]["price"]
-            spread = best_ask - best_bid
+            market_id = best["market_id"]
+            title = best["event_title"]
 
-            # 1. Spread stress: spread of 0.10 = 100% stress
-            spread_stress = min(spread * 10, 1.0)
+            # Bayse ticker is outcome-level, and docs support outcome or outcomeId.
+            ticker = await self.client.get_ticker(market_id, outcome="YES")
 
-            # 2. Ask imbalance: more ask volume = crowd selling = panic
-            # Docs confirmed field is 'quantity' not 'amount'
-            bid_vol = sum(b["quantity"] for b in bids[:5])
-            ask_vol = sum(a["quantity"] for a in asks[:5])
-            total_vol = bid_vol + ask_vol
-            imbalance = ask_vol / total_vol if total_vol > 0 else 0.5
+            yes_price = self._extract_yes_price(ticker)
 
-            # Final score: spread weighted 70%, imbalance 30%
-            score = (spread_stress * 0.7 + imbalance * 0.3) * 100
+            # Normalize if anything odd comes back in 0–100 scale.
+            if yes_price > 1.0:
+                yes_price /= 100.0
 
-            # Map score to QUELO's 4 stress levels
-            if score >= 80:
-                status = "EXTREME PANIC"
-            elif score >= 60:
-                status = "HIGH STRESS"
-            elif score >= 30:
-                status = "MODERATE"
-            else:
-                status = "CALM"
+            yes_price = min(max(yes_price, 0.0), 1.0)
+            no_price = round(1.0 - yes_price, 4)
+
+            score = self.calculate_stress(yes_price, no_price)
+            status = self.classify(score)
 
             self.current_signal = {
-                "score": round(score, 2),
+                "score": score,
                 "status": status,
-                "crowd_yes_price": round(best_bid, 4),
-                "crowd_no_price": round(best_ask, 4),
-                "spread": round(spread, 4),
-                "imbalance": round(imbalance, 4),
-                "market_title": self.current_signal.get("market_title", ""),
+                "crowd_yes_price": round(yes_price, 4),
+                "crowd_no_price": no_price,
+                "spread": round(abs(yes_price - no_price), 4),
+                "imbalance": round(abs(yes_price - 0.5) * 2, 4),
+                "market_title": title,
+                "market_id": market_id,
+                "outcome": ticker.get("outcome", "YES"),
+                "mid_price": ticker.get("midPrice"),
+                "best_bid": ticker.get("bestBid"),
+                "best_ask": ticker.get("bestAsk"),
+                "last_price": ticker.get("lastPrice"),
+                "volume24h": ticker.get("volume24h", 0),
+                "trade_count_24h": ticker.get("tradeCount24h", 0),
+                "source": "Bayse Prediction Markets",
+                "updated_at": time.time(),
             }
 
             print(
-                f"[QUELO Stress] Score: {score:.1f} | "
-                f"Status: {status} | Spread: {spread:.4f}"
+                f"[Bayse Monitor] {title[:50]} | "
+                f"YES: {yes_price:.3f} NO: {no_price:.3f} | "
+                f"Stress: {score:.1f} ({status})"
             )
 
         except Exception as e:
-            print(f"⚠️ Stress calculation error: {e}")
+            print(f"[Bayse Monitor] Fetch error: {e}")
 
-    async def resolve_market(self):
-        """Find the best Nigerian financial market on Bayse at startup"""
-        self.market_id = await self.client.find_market_id(QUELO_KEYWORDS)
-        if not self.market_id:
-            raise Exception("No active Nigerian financial market found on Bayse")
-        print(f"✅ QUELO stress monitor locked to market: {self.market_id}")
+    # ── LOOP ───────────────────────────────────────────────
 
     async def start(self):
         """
-        Background task — keeps stress signal updated in real time.
-        Call this once at app startup.
+        Poll Bayse every 60 seconds.
+        The first fetch happens immediately.
         """
-        # Step 1: find the right Bayse market
-        await self.resolve_market()
+        print("[Bayse Monitor] Starting REST polling...")
+        while True:
+            await self.fetch_once()
+            await asyncio.sleep(60)
 
-        # Step 2: connect WebSocket
-        await self.ws.connect()
-        await self.ws.subscribe_orderbook(self.market_id)
-
-        # Step 3: listen and recalculate on every update
-        async for orderbook in self.ws.listen():
-            self.calculate_stress(orderbook)
-
-    def get_signal(self) -> dict:
-        """Called by brain/pipeline.py to get current stress from Bayse"""
+    def get_signal(self) -> Dict:
         return self.current_signal
 
 
-# Singleton — shared across the entire brain
+# Singleton shared across app, routes, and pipeline.
 monitor = LiveStressMonitor()

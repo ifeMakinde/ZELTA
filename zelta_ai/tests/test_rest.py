@@ -1,5 +1,5 @@
 import asyncio
-from brain.bayse.client import BayseClient
+from zelta_ai.brain.bayse.client import BayseClient
 
 
 def extract_list(response):

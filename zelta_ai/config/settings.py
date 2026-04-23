@@ -1,25 +1,26 @@
 import os
-import logging
 from dotenv import load_dotenv
+
 load_dotenv()
-logger = logging.getLogger(__name__)
 
 
 class Settings:
-    BAYSE_PUBLIC_KEY: str
-    BAYSE_PRIVATE_KEY: str
+    # Bayse Markets
+    BAYSE_PUBLIC_KEY:  str = os.getenv("BAYSE_PUBLIC_KEY", "")
+    BAYSE_PRIVATE_KEY: str = os.getenv("BAYSE_PRIVATE_KEY", "")
 
-    def __init__(self):
-        self.BAYSE_PUBLIC_KEY = self._get_env("BAYSE_PUBLIC_KEY")
-        self.BAYSE_PRIVATE_KEY = self._get_env("BAYSE_PRIVATE_KEY")
+    # Gemini — THIS WAS MISSING
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
-        logger.info("BAYSE keys loaded successfully")
+    # News API
+    NEWS_API_KEY: str = os.getenv("NEWS_API_KEY", "")
 
-    def _get_env(self, key: str) -> str:
-        value = os.getenv(key)
-        if not value:
-            raise ValueError(f"Missing {key} in environment")
-        return value
+    # Internal security
+    INTERNAL_API_KEY: str = os.getenv("INTERNAL_API_KEY", "")
+
+    # App
+    DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
+    PORT:  int  = int(os.getenv("PORT", "8080"))
 
 
 settings = Settings()

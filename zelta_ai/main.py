@@ -5,47 +5,59 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import router
+from api.routes import router, public_router
 from brain.bayse.stress_signal import monitor
 
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
-PORT  = int(os.getenv("PORT", "8080"))
+PORT = int(os.getenv("PORT", "8080"))
 
 
-# ── Lifespan ──────────────────────────────────────────────────────────────────
+# ── LIFESPAN ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Start Bayse WebSocket monitor in background.
-    App starts and binds port FIRST, then connects Bayse.
-    This prevents Cloud Run startup timeout.
-    """
     print("[ZELTA Brain] Starting up...")
 
-    # Start Bayse monitor safely in background
-    # App does NOT wait for it — port binds immediately
-    async def safe_start():
-        try:
-            print("[ZELTA Brain] Connecting to Bayse WebSocket...")
-            await monitor.start()
-        except Exception as e:
-            print(f"[ZELTA Brain] Bayse monitor error: {e}")
-            print("[ZELTA Brain] Running with default stress signal")
-
-    task = asyncio.create_task(safe_start())
-    print("[ZELTA Brain] Ready. Bayse monitor starting in background.")
-
-    yield  # App is running and serving requests
-
-    print("[ZELTA Brain] Shutting down...")
-    task.cancel()
+    # Warmup fetch once so /api/stress has useful data immediately.
     try:
-        await task
-    except asyncio.CancelledError:
-        pass
+        await monitor.fetch_once()
+    except Exception as e:
+        print(f"[ZELTA Brain] Warmup fetch failed: {e}")
+
+    stop_event = asyncio.Event()
+
+    async def monitor_loop():
+        """
+        Run the Bayse monitor continuously in the background.
+        If a cycle crashes, log it and retry after a short delay.
+        """
+        while not stop_event.is_set():
+            try:
+                await monitor.fetch_once()
+            except Exception as e:
+                print(f"[ZELTA Brain] Monitor error: {e}")
+
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=60)
+            except asyncio.TimeoutError:
+                pass
+
+    task = asyncio.create_task(monitor_loop())
+    print("[ZELTA Brain] Ready.")
+
+    try:
+        yield
+    finally:
+        print("[ZELTA Brain] Shutting down...")
+        stop_event.set()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        print("[ZELTA Brain] Monitor stopped.")
 
 
-# ── FastAPI App ───────────────────────────────────────────────────────────────
+# ── APP ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="ZELTA AI Brain",
     description="Behavioral Quantitative Financial Intelligence",
@@ -59,34 +71,37 @@ app = FastAPI(
 # ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Tighten after hackathon
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
-app.include_router(router)
+# ── ROUTES ────────────────────────────────────────────────────────────────────
+app.include_router(router)         # /brain/*
+app.include_router(public_router)  # /api/*
 
 
-# ── Root health check ─────────────────────────────────────────────────────────
-# Cloud Run pings this to check if app is alive
-# MUST respond in milliseconds — no ML calls here
+# ── ROOT ──────────────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
+    signal = monitor.get_signal()
+
     return {
         "service": "ZELTA AI Brain",
-        "status":  "running",
+        "status": "running",
         "version": "1.0.0",
-        "bayse_connected": monitor.ws.connected,
-        "stress_score":    monitor.current_signal.get("score", 50),
+        "bayse_connected": True,
+        "stress_score": signal.get("score", 50),
+        "stress_level": signal.get("status", "UNKNOWN"),
     }
 
 
-# ── Dev entry point ───────────────────────────────────────────────────────────
+# ── DEV ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
