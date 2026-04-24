@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from google import genai
 from google.genai.types import GenerateContentConfig, HttpOptions
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from config.settings import settings
 
@@ -32,18 +32,29 @@ class ZeltaCopilot:
     """
 
     SYSTEM_PROMPT = """
-You are the ZELTA BQ Co-Pilot — a behavioral quantitative financial
-intelligence assistant built for Nigerian university students.
+You are ZELTA, a friendly money guide for Nigerian university students.
 
-You ONLY answer:
-- Explain ZELTA signals
-- Explain finance concepts simply
-- Tell the user what to do
+Your job is to explain ZELTA results in simple, calm, everyday English.
+Pretend you are talking to a student who has little or no finance knowledge.
 
-You NEVER go outside finance.
-You ALWAYS end with: VERDICT: INVEST/SAVE/HOLD + NGN amount.
-Keep answers under 120 words.
-Plain English only.
+You should:
+- explain what the market is doing
+- explain what it means for the student
+- explain what action to take
+- use real Naira amounts
+- use student life examples when helpful
+
+You must NEVER:
+- sound like a textbook
+- use heavy finance jargon
+- be vague
+- be dramatic
+
+Keep answers short, clear, and practical.
+Always end with a clear verdict and Naira amount when relevant.
+
+If you are returning JSON, return ONLY valid JSON.
+If you are answering a question, keep the answer under 120 words.
 """.strip()
 
     JSON_SYSTEM_PROMPT = """
@@ -57,6 +68,7 @@ Rules:
 - Use double quotes for all strings.
 - If a field is unknown, use null.
 - Keep the action field short and direct.
+- Keep the wording simple enough for a student to understand.
 """.strip()
 
     def __init__(self):
@@ -121,60 +133,139 @@ Rules:
         stress = data.get("stress", {})
         bias = data.get("bias", {})
         nlp = data.get("nlp", {})
-        kelly = data.get("allocation") or {}
+        kelly = data.get("allocation") or data.get("kelly", {})
         sharpe = data.get("sharpe") or data.get("score", {})
 
+        headlines = nlp.get("scored_headlines", [])[:3]
+        headline_text = "\n".join(
+            f"- {h.get('title', 'Untitled')} ({h.get('sentiment_label', 'neutral')})"
+            for h in headlines
+        ) if headlines else "No headlines available"
+
+        verdict = decision.get("verdict", "HOLD")
+        invest_ngn = kelly.get("invest_ngn", 0)
+        save_ngn = kelly.get("save_ngn", 0)
+        hold_ngn = kelly.get("hold_ngn", 0)
+        stress_score = stress.get("score", 50)
+        stress_level = stress.get("level", "MODERATE")
+        bias_name = bias.get("bias", "Rational")
+        market_prob = round((decision.get("market_probability", 0.5) or 0) * 100)
+        rational_prob = round((decision.get("rational_probability", 0.5) or 0) * 100)
+        market_title = data.get("bayse", {}).get("market_title", "Nigerian financial market")
+
         return f"""
-Interpret this ZELTA data:
+You are ZELTA, a money guide for Nigerian university students.
 
-Market Probability: {decision.get("market_probability")}
-Rational Probability: {decision.get("rational_probability")}
-Edge: {decision.get("edge")}
-Verdict: {decision.get("verdict")}
+Explain this result like you are talking to a student friend who does not understand finance.
+The student cares about:
+- hostel fees
+- food money
+- transport
+- data
+- side hustle money
+- savings
+- avoiding panic
 
-Stress: {stress.get("score")}/100 ({stress.get("level")})
-Sentiment: {nlp.get("aggregate_sentiment")}
+HERE IS THE SITUATION:
+- Market stress: {stress_score}/100 ({stress_level})
+- Market event: "{market_title}"
+- Crowd view: {market_prob}% are leaning YES
+- ZELTA view: {rational_prob}% are leaning YES
+- Difference between crowd and ZELTA: {abs(market_prob - rational_prob)}%
+- Active money habit: {bias_name}
+- What that means: {bias.get("explanation", "")}
+- ZELTA recommendation: {verdict}
+- Safe amount to invest: ₦{invest_ngn:,.0f}
+- Amount to save: ₦{save_ngn:,.0f}
+- Amount to keep as buffer: ₦{hold_ngn:,.0f}
 
-Bias: {bias.get("bias")} ({bias.get("confidence")})
+TOP NIGERIAN NEWS HEADLINES:
+{headline_text}
 
-Invest: {kelly.get("invest_ngn")}
-Save: {kelly.get("save_ngn")}
-Hold: {kelly.get("hold_ngn")}
+HOW TO RESPOND:
+- Use very simple English
+- Talk like a calm, smart friend
+- Connect the advice to student life
+- Mention the actual Naira amounts
+- Explain the "why" in a way anyone can understand
+- Do not sound like a finance lecturer
+- Do not use technical terms
+- Keep each field short and clear
 
-Decision Score: {sharpe.get("decision_score", sharpe.get("score"))}
+RETURN ONLY VALID JSON.
+No markdown.
+No backticks.
+No extra text outside JSON.
 
-Return ONLY valid JSON matching this shape:
 {{
-  "summary": "string",
-  "reasoning": "string",
-  "action": "string",
-  "confidence_note": "string",
-  "bq_alert": null,
-  "context_summary": null
-}}
+  "summary": "1 short sentence: what is happening in the market today in simple words.",
 
-Important:
-- Make action short.
-- Do not repeat the whole explanation inside action.
+  "reasoning": "2 short sentences: why ZELTA made this recommendation, using the crowd view, ZELTA view, and the student's money situation.",
+
+  "action": "1 short sentence: what the student should do with their money right now, with actual NGN amounts.",
+
+  "what_this_means_for_you": "1-2 short sentences: explain how this affects the student's real life, savings, fees, or daily spending.",
+
+  "bias_explanation": "1 short sentence: explain the active bias in simple language the student will understand.",
+
+  "bq_alert": "Short warning if there is stress spending, panic, or risky behavior. Use student-friendly language. Set to null if no alert is needed.",
+
+  "context_summary": "1 short line for the UI pills, such as: 'Bayse: 44% YES | Market calm | HOLD recommended'"
+}}
 """.strip()
 
     def _build_question_prompt(self, question: str, context: Dict[str, Any]) -> str:
+        stress = context.get("stress", {})
+        bias = context.get("bias", {})
+        kelly = context.get("allocation") or context.get("kelly", {})
         decision = context.get("decision", {})
-        kelly = context.get("allocation", {})
+        bayse = context.get("bayse", {})
+
+        invest_ngn = kelly.get("invest_ngn", 0)
+        save_ngn = kelly.get("save_ngn", 0)
+        hold_ngn = kelly.get("hold_ngn", 0)
 
         return f"""
-User question: {question}
+You are ZELTA, a money assistant for Nigerian university students.
 
-Context:
-- Verdict: {decision.get("verdict")}
-- Invest: ₦{kelly.get("invest_ngn", 0):,.0f}
-- Save: ₦{kelly.get("save_ngn", 0):,.0f}
-- Hold: ₦{kelly.get("hold_ngn", 0):,.0f}
+A student just asked you a question.
+Reply like a calm smart friend who explains money in simple words.
+Assume the student does NOT know finance terms.
 
-Answer clearly in plain English.
-Keep it under 120 words.
-End with:
-VERDICT: [INVEST/SAVE/HOLD] ₦[amount]
+The student asked:
+"{question}"
+
+Here is their current situation:
+- Market stress: {stress.get("score", 50)}/100 ({stress.get("level", "MODERATE")})
+- Market event: "{bayse.get("market_title", "Nigerian financial market")}"
+- Crowd view: {round((decision.get("market_probability", 0.5) or 0) * 100)}% YES
+- ZELTA view: {round((decision.get("rational_probability", 0.5) or 0) * 100)}% YES
+- ZELTA recommendation: {decision.get("verdict", "HOLD")}
+- Safe amount to invest: ₦{invest_ngn:,.0f}
+- Safe amount to save: ₦{save_ngn:,.0f}
+- Amount to hold as buffer: ₦{hold_ngn:,.0f}
+- Active money habit: {bias.get("bias", "Rational")}
+- What that means: {bias.get("explanation", "")}
+
+How to answer:
+- Answer the question directly
+- Use simple English only
+- Mention the actual Naira amounts
+- Make it useful for student life, like hostel fees, food, data, transport, or side hustle money
+- Keep it short, clear, and practical
+- Do not sound like a lecturer or a finance textbook
+
+Return ONLY valid JSON. No markdown. No backticks. No extra text.
+
+{{
+  "answer": "A short direct answer in simple language.",
+  "why": "1-2 short sentences explaining why this is the best move right now.",
+  "what_it_means": "1 short sentence connecting the advice to the student’s real life.",
+  "action": "A clear action statement using real Naira amounts.",
+  "verdict": "INVEST / SAVE / HOLD",
+  "amount": "₦[amount]",
+  "follow_up_tip": "A short practical tip the student can use next."
+}}
 """.strip()
 
     @staticmethod
@@ -242,7 +333,7 @@ VERDICT: [INVEST/SAVE/HOLD] ₦[amount]
             elif ch == "}":
                 depth -= 1
                 if depth == 0:
-                    return text[start : i + 1]
+                    return text[start:i + 1]
 
         return ""
 
@@ -262,7 +353,6 @@ VERDICT: [INVEST/SAVE/HOLD] ₦[amount]
 
         action = action.strip()
 
-        # Keep the verdict line if present, but trim overly long prose.
         verdict_match = re.search(
             r"(VERDICT:\s*(INVEST|SAVE|HOLD)\s*[₦N]?\s*[\d,]+(?:\.\d+)?)",
             action,
@@ -270,13 +360,12 @@ VERDICT: [INVEST/SAVE/HOLD] ₦[amount]
         )
         if verdict_match:
             verdict = verdict_match.group(1).strip()
-            prefix = action[: verdict_match.start()].strip()
+            prefix = action[:verdict_match.start()].strip()
             if prefix:
                 prefix = re.split(r"(?<=[.!?])\s+", prefix)[0].strip()
                 return f"{prefix} {verdict}".strip()
             return verdict
 
-        # If no verdict line, keep only the first sentence.
         parts = re.split(r"(?<=[.!?])\s+", action)
         return parts[0].strip() if parts else action
 
@@ -284,17 +373,19 @@ VERDICT: [INVEST/SAVE/HOLD] ₦[amount]
     def _normalize_question_answer(answer: str) -> str:
         answer = answer.strip()
 
-        # Standardize any missing currency symbol spacing.
-        answer = re.sub(r"VERDICT:\s*(INVEST|SAVE|HOLD)\s*([₦N])?\s*([\d,]+)",
-                        r"VERDICT: \1 ₦\3",
-                        answer,
-                        flags=re.IGNORECASE)
+        answer = re.sub(
+            r"VERDICT:\s*(INVEST|SAVE|HOLD)\s*([₦N])?\s*([\d,]+)",
+            r"VERDICT: \1 ₦\3",
+            answer,
+            flags=re.IGNORECASE,
+        )
 
-        # If the model forgot the symbol entirely but included an amount.
-        answer = re.sub(r"VERDICT:\s*(INVEST|SAVE|HOLD)\s+([\d,]+)",
-                        r"VERDICT: \1 ₦\2",
-                        answer,
-                        flags=re.IGNORECASE)
+        answer = re.sub(
+            r"VERDICT:\s*(INVEST|SAVE|HOLD)\s+([\d,]+)",
+            r"VERDICT: \1 ₦\2",
+            answer,
+            flags=re.IGNORECASE,
+        )
 
         return answer
 
@@ -339,6 +430,7 @@ Rules:
 - Use null for missing values.
 - Do not add markdown or explanation.
 - Keep action short.
+- Make the language easy for a student to understand.
 
 Broken output:
 {text}
