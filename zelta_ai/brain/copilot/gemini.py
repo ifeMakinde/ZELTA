@@ -20,6 +20,8 @@ class CopilotResult(BaseModel):
     summary: Optional[str] = None
     reasoning: Optional[str] = None
     action: Optional[str] = None
+    what_this_means_for_you: Optional[str] = None
+    bias_explanation: Optional[str] = None
     confidence_note: Optional[str] = None
     bq_alert: Optional[str] = None
     context_summary: Optional[str] = None
@@ -106,6 +108,8 @@ Rules:
                 "summary": {"type": "STRING"},
                 "reasoning": {"type": "STRING"},
                 "action": {"type": "STRING"},
+                "what_this_means_for_you": {"type": "STRING"},
+                "bias_explanation": {"type": "STRING"},
                 "confidence_note": {"type": "STRING"},
                 "bq_alert": {"type": "STRING", "nullable": True},
                 "context_summary": {"type": "STRING", "nullable": True},
@@ -114,6 +118,8 @@ Rules:
                 "summary",
                 "reasoning",
                 "action",
+                "what_this_means_for_you",
+                "bias_explanation",
                 "confidence_note",
                 "bq_alert",
                 "context_summary",
@@ -122,6 +128,8 @@ Rules:
                 "summary",
                 "reasoning",
                 "action",
+                "what_this_means_for_you",
+                "bias_explanation",
                 "confidence_note",
                 "bq_alert",
                 "context_summary",
@@ -152,6 +160,7 @@ Rules:
         market_prob = round((decision.get("market_probability", 0.5) or 0) * 100)
         rational_prob = round((decision.get("rational_probability", 0.5) or 0) * 100)
         market_title = data.get("bayse", {}).get("market_title", "Nigerian financial market")
+        decision_score = sharpe.get("decision_score", sharpe.get("score", 0))
 
         return f"""
 You are ZELTA, a money guide for Nigerian university students.
@@ -178,6 +187,7 @@ HERE IS THE SITUATION:
 - Safe amount to invest: ₦{invest_ngn:,.0f}
 - Amount to save: ₦{save_ngn:,.0f}
 - Amount to keep as buffer: ₦{hold_ngn:,.0f}
+- Decision quality score: {decision_score}
 
 TOP NIGERIAN NEWS HEADLINES:
 {headline_text}
@@ -200,7 +210,7 @@ No extra text outside JSON.
 {{
   "summary": "1 short sentence: what is happening in the market today in simple words.",
 
-  "reasoning": "2 short sentences: why ZELTA made this recommendation, using the crowd view, ZELTA view, and the student's money situation.",
+  "reasoning": "2 short sentences: why ZELTA made this recommendation, using the crowd view, ZELTA view, the news, and the student's money situation.",
 
   "action": "1 short sentence: what the student should do with their money right now, with actual NGN amounts.",
 
@@ -285,6 +295,8 @@ Return ONLY valid JSON. No markdown. No backticks. No extra text.
             "summary": None,
             "reasoning": None,
             "action": None,
+            "what_this_means_for_you": None,
+            "bias_explanation": None,
             "confidence_note": "AI explanation temporarily unavailable.",
             "bq_alert": None,
             "context_summary": None,
@@ -393,7 +405,7 @@ Return ONLY valid JSON. No markdown. No backticks. No extra text.
         config = GenerateContentConfig(
             system_instruction=f"{self.SYSTEM_PROMPT}\n\n{self.JSON_SYSTEM_PROMPT}",
             temperature=0.2,
-            max_output_tokens=1024,
+            max_output_tokens=2048,
             response_mime_type="application/json",
             response_schema=self._response_schema(),
         )
@@ -426,7 +438,8 @@ Fix this into valid JSON only.
 Rules:
 - Output ONLY valid JSON.
 - Keep the same keys:
-  summary, reasoning, action, confidence_note, bq_alert, context_summary
+  summary, reasoning, action, what_this_means_for_you, bias_explanation,
+  confidence_note, bq_alert, context_summary
 - Use null for missing values.
 - Do not add markdown or explanation.
 - Keep action short.
@@ -439,7 +452,7 @@ Broken output:
             repair_config = GenerateContentConfig(
                 system_instruction=f"{self.SYSTEM_PROMPT}\n\n{self.JSON_SYSTEM_PROMPT}",
                 temperature=0.0,
-                max_output_tokens=1024,
+                max_output_tokens=2048,
                 response_mime_type="application/json",
                 response_schema=self._response_schema(),
             )
