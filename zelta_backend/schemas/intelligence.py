@@ -1,56 +1,71 @@
 """
-Intelligence schemas — shaped to match the deployed AI Brain response exactly.
+Intelligence schemas — aligned with deployed ZELTA AI Brain + Co-Pilot output.
 
-Brain response top-level keys:
+Top-level keys:
   bayse, nlp, stress, bias, decision, confidence, allocation, score, explanation
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional, List, Dict
 
 
-# ─── Bayse ────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# BAYSE
+# ─────────────────────────────────────────────────────────────────────────────
 
 class BayseSchema(BaseModel):
     score: float
-    status: str                       # CALM / MODERATE / HIGH_STRESS / CRISIS
+    status: str  # CALM / MODERATE / HIGH_STRESS / CRISIS
+
     market_title: str = ""
     market_id: str = ""
+
     crowd_yes_price: float = 0.5
     crowd_no_price: float = 0.5
     mid_price: float = 0.5
+
     best_bid: float = 0.0
     best_ask: float = 0.0
+
     spread: float = 0.0
     imbalance: float = 0.0
+
     volume24h: float = 0.0
     trade_count_24h: int = 0
+
     available: bool = True
-    # Aliased convenience fields
+
+    # Derived / alias fields
     raw_crowd_stress: float = 50.0
     naira_weakness_probability: float = 50.0
 
 
-# ─── NLP ──────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# NLP
+# ─────────────────────────────────────────────────────────────────────────────
 
 class ScoredHeadline(BaseModel):
     source: str = ""
     title: str = ""
     url: str = ""
     timestamp: Optional[str] = None
-    sentiment: int = 0               # -1, 0, 1
+
+    sentiment: int = 0  # -1, 0, 1
     confidence: float = 0.0
     sentiment_label: str = "neutral"
+
     is_campus_relevant: bool = False
     weight: float = 1.0
 
 
 class NLPSchema(BaseModel):
-    scored_headlines: List[ScoredHeadline] = []
+    scored_headlines: List[ScoredHeadline] = Field(default_factory=list)
     aggregate_sentiment: float = 0.0
 
 
-# ─── Stress ───────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# STRESS
+# ─────────────────────────────────────────────────────────────────────────────
 
 class StressComponents(BaseModel):
     bayse_stress: float = 0.0
@@ -61,39 +76,52 @@ class StressComponents(BaseModel):
 
 
 class StressSchema(BaseModel):
-    combined_index: float             # 0-100
-    level: str                        # CALM / MODERATE / HIGH_STRESS / CRISIS
-    label: str                        # Plain English description
-    bayse_primary: float = 0.0        # Bayse component (scaled 0-100)
-    nlp_secondary: float = 0.0        # NLP component (scaled 0-100)
+    combined_index: float  # 0-100
+    level: str             # CALM / MODERATE / HIGH_STRESS / CRISIS
+    label: str
+
+    bayse_primary: float = 0.0
+    nlp_secondary: float = 0.0
+
     market_probability: float = 0.5
     bayse_weight: float = 0.6
     nlp_weight: float = 0.4
 
 
-# ─── Bias ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# BIAS
+# ─────────────────────────────────────────────────────────────────────────────
 
 class BiasSchema(BaseModel):
-    active_bias: str                  # e.g. "Rational", "LOSS_AVERSION"
-    confidence: str                   # "Low" / "Moderate" / "High"
+    active_bias: str
+    confidence: str  # Low / Moderate / High
     explanation: str = ""
-    inputs: dict = {}
+
+    inputs: Dict = Field(default_factory=dict)
 
 
-# ─── Decision ─────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# DECISION
+# ─────────────────────────────────────────────────────────────────────────────
 
 class DecisionSchema(BaseModel):
-    verdict: str                      # HOLD / INVEST / SAVE
+    verdict: str  # HOLD / INVEST / SAVE
+
     market_probability: float = 0.5
     rational_probability: float = 0.5
+
     edge: float = 0.0
     confidence: str = "Low"
+
     win_probability: float = 0.5
     bias_applied: str = "Rational"
+
     plain_english: str = ""
 
 
-# ─── Confidence ───────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# CONFIDENCE
+# ─────────────────────────────────────────────────────────────────────────────
 
 class ConfidenceMetrics(BaseModel):
     edge_contribution: float = 0.0
@@ -102,31 +130,43 @@ class ConfidenceMetrics(BaseModel):
 
 
 class ConfidenceSchema(BaseModel):
-    rational_pct: float               # % of decision that is rational
-    behavioral_pct: float             # % that is emotional/behavioral
-    gap: float                        # |rational - behavioral|
-    confidence_score: float           # 0-100
-    confidence_tier: str              # Low / Moderate / High
-    score_label: str                  # WEAK / MODERATE / STRONG
-    intervention_urgency: str         # LOW / MODERATE / HIGH
+    rational_pct: float
+    behavioral_pct: float
+    gap: float
+
+    confidence_score: float  # 0-100
+    confidence_tier: str
+
+    score_label: str
+    intervention_urgency: str
+
     is_actionable: bool = False
     plain_english: str = ""
-    metrics: ConfidenceMetrics = ConfidenceMetrics()
+
+    metrics: ConfidenceMetrics = Field(default_factory=ConfidenceMetrics)
 
 
-# ─── Allocation ───────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# ALLOCATION
+# ─────────────────────────────────────────────────────────────────────────────
 
 class AllocationSchema(BaseModel):
-    verdict: str                      # HOLD / INVEST / SAVE
-    invest_amount: float = 0.0        # NGN (mapped from invest_ngn)
-    save_amount: float = 0.0          # NGN (mapped from save_ngn)
-    hold_amount: float = 0.0          # NGN (mapped from hold_ngn)
+    verdict: str
+
+    # Support BOTH naming styles (service already handles mapping)
+    invest_amount: float = 0.0
+    save_amount: float = 0.0
+    hold_amount: float = 0.0
+
     allocation_pct: float = 0.0
     allocator_notes: str = ""
+
     plain_english: str = ""
 
 
-# ─── Score ────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# SCORE
+# ─────────────────────────────────────────────────────────────────────────────
 
 class ScoreComponents(BaseModel):
     edge_score: float = 0.0
@@ -135,39 +175,52 @@ class ScoreComponents(BaseModel):
 
 
 class ScoreSchema(BaseModel):
-    score: float                      # 0-5 (or 0-100 in some versions)
+    score: float
     decision_score: float
-    rating: str                       # Poor / Fair / Good / Strong / Excellent
-    components: ScoreComponents = ScoreComponents()
+    rating: str
+
+    components: ScoreComponents = Field(default_factory=ScoreComponents)
 
 
-# ─── Explanation ──────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPLANATION (UPDATED FOR COPILOT)
+# ─────────────────────────────────────────────────────────────────────────────
 
 class ExplanationSchema(BaseModel):
     summary: str = ""
     reasoning: str = ""
     action: str = ""
-    confidence_note: str = ""
-    bq_alert: str = ""
-    context_summary: str = ""
+
+    # ✅ NEW (from your Copilot upgrade)
+    what_this_means_for_you: Optional[str] = None
+    bias_explanation: Optional[str] = None
+
+    confidence_note: Optional[str] = None
+    bq_alert: Optional[str] = None
+    context_summary: Optional[str] = None
 
 
-# ─── Top-level BrainResponse ──────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# TOP LEVEL
+# ─────────────────────────────────────────────────────────────────────────────
 
 class BrainResponse(BaseModel):
     """
     Normalised response from the deployed ZELTA AI Brain.
-    All field names match the normaliser output in optimizer.py.
     """
+
     bayse: BayseSchema
-    nlp: NLPSchema = NLPSchema()
+    nlp: NLPSchema = Field(default_factory=NLPSchema)
+
     stress: StressSchema
     bias: BiasSchema
     decision: DecisionSchema
+
     confidence: ConfidenceSchema
     allocation: AllocationSchema
     score: ScoreSchema
-    explanation: ExplanationSchema = ExplanationSchema()
+
+    explanation: ExplanationSchema = Field(default_factory=ExplanationSchema)
 
 
 class IntelligenceResponse(BaseModel):
@@ -175,12 +228,15 @@ class IntelligenceResponse(BaseModel):
     data: BrainResponse
 
 
-# ─── Lightweight endpoint schemas ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# LIGHTWEIGHT RESPONSES
+# ─────────────────────────────────────────────────────────────────────────────
 
 class StressOnlyResponse(BaseModel):
     stress_index: float
     level: str
     label: str
+
     bayse_primary: float
     nlp_secondary: float
     market_probability: float
@@ -194,7 +250,9 @@ class BayseMarketItem(BaseModel):
 
 class BayseMarketsResponse(BaseModel):
     markets: List[BayseMarketItem]
+
     composite_stress: float
     bayse_available: bool
+
     market_title: str = ""
     verdict: str = ""
