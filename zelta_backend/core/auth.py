@@ -1,3 +1,4 @@
+import firebase_admin
 from firebase_admin import auth
 from fastapi import HTTPException, status
 from core.firebase import get_auth
