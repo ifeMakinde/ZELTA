@@ -6,8 +6,16 @@ GET and UPDATE user profile with nested financial, preferences, and notification
 
 import logging
 from datetime import datetime, timezone
+
 from google.cloud import firestore
-from schemas.profile import UserProfile, UpdateProfileRequest, FinancialProfile, PreferencesProfile, NotificationsProfile
+
+from schemas.profile import (
+    FinancialProfile,
+    NotificationsProfile,
+    PreferencesProfile,
+    UpdateProfileRequest,
+    UserProfile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +32,11 @@ async def get_profile(db: firestore.Client, uid: str) -> UserProfile:
     if not doc.exists:
         return UserProfile(uid=uid, email="", name="")
 
-    data = doc.to_dict()
+    data = doc.to_dict() or {}
 
-    # Deserialize nested objects
-    financial_data = data.get("financial", {})
-    prefs_data = data.get("preferences", {})
-    notif_data = data.get("notifications", {})
+    financial_data = data.get("financial", {}) or {}
+    prefs_data = data.get("preferences", {}) or {}
+    notif_data = data.get("notifications", {}) or {}
 
     return UserProfile(
         uid=uid,
@@ -39,14 +46,17 @@ async def get_profile(db: firestore.Client, uid: str) -> UserProfile:
         university=data.get("university"),
         department=data.get("department"),
         level=data.get("level"),
-        financial=FinancialProfile(**financial_data) if financial_data else FinancialProfile(),
-        preferences=PreferencesProfile(**prefs_data) if prefs_data else PreferencesProfile(),
-        notifications=NotificationsProfile(**notif_data) if notif_data else NotificationsProfile(),
+        financial=FinancialProfile(**financial_data),
+        preferences=PreferencesProfile(**prefs_data),
+        notifications=NotificationsProfile(**notif_data),
     )
 
 
 async def create_or_update_profile(
-    db: firestore.Client, uid: str, current_user: dict, request: UpdateProfileRequest
+    db: firestore.Client,
+    uid: str,
+    current_user: dict,
+    request: UpdateProfileRequest,
 ) -> UserProfile:
     """
     Create or update user profile. Supports partial nested updates.
@@ -75,37 +85,44 @@ async def create_or_update_profile(
     if request.level is not None:
         updates["level"] = request.level
 
-    # Nested partial merge for financial
     if request.financial is not None:
         existing_financial = existing.get("financial", {})
-        new_financial = {**existing_financial, **request.financial.model_dump(exclude_none=True)}
+        new_financial = {
+            **existing_financial,
+            **request.financial.model_dump(exclude_none=True),
+        }
         updates["financial"] = new_financial
     elif "financial" not in existing:
         updates["financial"] = {}
 
-    # Nested partial merge for preferences
     if request.preferences is not None:
         existing_prefs = existing.get("preferences", {})
-        new_prefs = {**existing_prefs, **request.preferences.model_dump(exclude_none=True)}
+        new_prefs = {
+            **existing_prefs,
+            **request.preferences.model_dump(exclude_none=True),
+        }
         updates["preferences"] = new_prefs
     elif "preferences" not in existing:
         updates["preferences"] = {}
 
-    # Nested partial merge for notifications
     if request.notifications is not None:
         existing_notif = existing.get("notifications", {})
-        new_notif = {**existing_notif, **request.notifications.model_dump(exclude_none=True)}
+        new_notif = {
+            **existing_notif,
+            **request.notifications.model_dump(exclude_none=True),
+        }
         updates["notifications"] = new_notif
     elif "notifications" not in existing:
         updates["notifications"] = {}
 
     ref.set(updates, merge=True)
-
     return await get_profile(db, uid)
 
 
 async def initialize_profile_on_first_login(
-    db: firestore.Client, uid: str, current_user: dict
+    db: firestore.Client,
+    uid: str,
+    current_user: dict,
 ) -> UserProfile:
     """
     Called on first login or if profile doesn't exist.
@@ -131,6 +148,6 @@ async def initialize_profile_on_first_login(
     }
 
     ref.set(default_profile)
-    logger.info(f"Created default profile for user {uid}")
+    logger.info("Created default profile for user %s", uid)
 
     return await get_profile(db, uid)
