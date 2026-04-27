@@ -24,7 +24,6 @@ def _build_firebase_credential():
     2. Service account file path
     3. Application Default Credentials
     """
-
     service_account_json = getattr(settings, "firebase_service_account_json", "").strip()
     service_account_path = getattr(settings, "firebase_service_account_path", "").strip()
 
@@ -50,7 +49,6 @@ def _build_firebase_credential():
 # ─────────────────────────────────────────────────────────────
 def initialize_firebase() -> None:
     """Initialize Firebase Admin SDK safely."""
-
     global _firestore_client
 
     # Initialize app once
@@ -63,11 +61,16 @@ def initialize_firebase() -> None:
             logger.error(f"Firebase initialization failed: {e}", exc_info=True)
             raise
 
-    # Initialize Firestore client (IMPORTANT FIX)
+    # Initialize Firestore client (FIXED FOR NAMING MISMATCHES)
     if _firestore_client is None:
         try:
-            _firestore_client = admin_firestore.client()
-            logger.info("Firestore client initialized via Firebase Admin SDK.")
+            # Check for a specific database ID in settings, fall back to '(default)'
+            db_id = getattr(settings, "firebase_database_id", "(default)").strip()
+            
+            # This is where we pass the database name to prevent 404s
+            _firestore_client = admin_firestore.client(database=db_id)
+            
+            logger.info(f"Firestore client connected to database: {db_id}")
         except Exception as e:
             logger.error(f"Firestore initialization failed: {e}", exc_info=True)
             raise
@@ -91,7 +94,6 @@ def get_firestore():
 # ─────────────────────────────────────────────────────────────
 def get_auth() -> Any:
     """Return Firebase Auth module."""
-
     if not firebase_admin._apps:
         initialize_firebase()
 
