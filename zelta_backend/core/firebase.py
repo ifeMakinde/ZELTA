@@ -61,18 +61,31 @@ def initialize_firebase() -> None:
             logger.error(f"Firebase initialization failed: {e}", exc_info=True)
             raise
 
-    # Initialize Firestore client (FIXED FOR NAMING MISMATCHES)
+    # Initialize Firestore client
     if _firestore_client is None:
         try:
-            # Check for a specific database ID in settings, fall back to '(default)'
+            # 1. Get the DB ID from settings. 
+            # Note: Your console showed 'default', so ensure your env var matches that.
             db_id = getattr(settings, "firebase_database_id", "(default)").strip()
             
-            # This is where we pass the database name to prevent 404s
-            _firestore_client = admin_firestore.client(database=db_id)
+            # 2. Use 'database_id' keyword for named databases.
+            # If using the standard system default, call client() without arguments.
+            if db_id == "(default)":
+                _firestore_client = admin_firestore.client()
+            else:
+                # CRITICAL FIX: The parameter name is 'database_id'
+                _firestore_client = admin_firestore.client(database_id=db_id)
             
             logger.info(f"Firestore client connected to database: {db_id}")
+            
+        except TypeError as e:
+            logger.error(
+                "TypeError in Firestore init. Ensure 'firebase-admin' is version 6.6.0 or higher "
+                "to support the 'database_id' argument."
+            )
+            raise e
         except Exception as e:
-            logger.error(f"Firestore initialization failed: {e}", exc_info=True)
+            logger.info(f"Firestore initialization failed: {e}")
             raise
 
 
