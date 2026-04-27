@@ -17,6 +17,14 @@ from brain.copilot.gemini import ZeltaCopilot
 logger = logging.getLogger("zelta.pipeline")
 
 
+def _to_dict(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    return {}
+
+
 class ZeltaPipeline:
     """
     Central AI Brain Orchestrator (QUELO)
@@ -78,42 +86,61 @@ class ZeltaPipeline:
             transactions = transactions or []
             user_context = user_context or {}
 
-            bayse_data = self.bayse.get_signal()
+            # 1. PRIMARY SIGNAL
+            bayse_data = self.bayse.get_signal() or {}
 
+            # 2. NLP
             news_payload = await self._load_news_payload(bayse_data)
-            nlp_data = self.nlp.run(news_payload)
-            aggregate_sentiment = nlp_data.get("aggregate_sentiment", 0.0)
+            nlp_data = _to_dict(self.nlp.run(news_payload))
+            aggregate_sentiment = float(nlp_data.get("aggregate_sentiment", 0.0))
 
-            stress_data = run_stress_index(
-                bayse_data,
-                aggregate_sentiment,
+            # 3. STRESS
+            stress_data = _to_dict(
+                run_stress_index(
+                    bayse_data,
+                    aggregate_sentiment,
+                )
             )
 
-            bias_data = self.bias.run(
-                stress_data,
-                aggregate_sentiment,
-                wallet_data,
+            # 4. BIAS
+            bias_data = _to_dict(
+                self.bias.run(
+                    stress_data,
+                    aggregate_sentiment,
+                    wallet_data,
+                )
             )
 
-            bayesian_data = run_bayesian_engine(
-                stress_data,
-                bias_data,
+            # 5. BAYESIAN
+            bayesian_data = _to_dict(
+                run_bayesian_engine(
+                    stress_data,
+                    bias_data,
+                )
             )
 
-            confidence_data = run_confidence_scorer(
-                bayesian_data,
-                stress_data,
-                bias_data,
+            # 6. CONFIDENCE
+            confidence_data = _to_dict(
+                run_confidence_scorer(
+                    bayesian_data,
+                    stress_data,
+                    bias_data,
+                )
             )
 
-            kelly_data = run_kelly_allocator(
-                bayesian_data,
-                confidence_data,
-                wallet_data,
+            # 7. KELLY
+            kelly_data = _to_dict(
+                run_kelly_allocator(
+                    bayesian_data,
+                    confidence_data,
+                    wallet_data,
+                )
             )
 
-            sharpe_data = self.sharpe.run(bayesian_data)
+            # 8. SHARPE
+            sharpe_data = _to_dict(self.sharpe.run(bayesian_data))
 
+            # 9. COPILOT
             explanation = await self.copilot.run(
                 {
                     "bayse": bayse_data,
@@ -129,6 +156,7 @@ class ZeltaPipeline:
                     "user_context": user_context,
                 }
             )
+            explanation = _to_dict(explanation)
 
             latency = round(time.time() - start_time, 3)
 
