@@ -11,6 +11,7 @@ It:
 
 import json
 import logging
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
@@ -35,7 +36,7 @@ def _brain_headers() -> dict:
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    if settings.internal_api_key:
+    if getattr(settings, "internal_api_key", ""):
         headers["x-api-key"] = settings.internal_api_key
     return headers
 
@@ -82,6 +83,36 @@ def _safe_list(value: Any) -> list:
     return value if isinstance(value, list) else []
 
 
+def _json_safe(value: Any) -> Any:
+    """
+    Recursively convert non-JSON-serializable values into JSON-safe values.
+    Important for Firestore timestamps and similar objects.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+
+    iso = getattr(value, "isoformat", None)
+    if callable(iso):
+        try:
+            return iso()
+        except Exception:
+            pass
+
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+
+    return value
+
+
 def _extract_body(data: Any) -> dict:
     """
     Handles:
@@ -106,7 +137,7 @@ def _brain_payload(
     transactions = transactions or []
     user_context = user_context or {}
 
-    return {
+    payload = {
         "wallet_data": {
             "free_cash": _safe_float(wallet_data.get("free_cash", 0.0)),
             "locked_total": _safe_float(
@@ -114,9 +145,11 @@ def _brain_payload(
             ),
             "total_balance": _safe_float(wallet_data.get("total_balance", 0.0)),
         },
-        "transactions": _safe_list(transactions),
-        "user_context": _safe_dict(user_context),
+        "transactions": transactions,
+        "user_context": user_context,
     }
+
+    return _json_safe(payload)
 
 
 async def run_brain(
@@ -244,7 +277,10 @@ def _normalise_bayse(raw: dict) -> dict:
     raw = raw or {}
     score = _safe_float(raw.get("score", 50.0))
     mid_price = _safe_float(raw.get("mid_price", 0.5))
-    yes_prob = _safe_float(raw.get("naira_weakness_probability", round(mid_price * 100, 2)), round(mid_price * 100, 2))
+    yes_prob = _safe_float(
+        raw.get("naira_weakness_probability", round(mid_price * 100, 2)),
+        round(mid_price * 100, 2),
+    )
 
     return {
         "score": score,
