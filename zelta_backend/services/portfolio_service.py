@@ -5,15 +5,20 @@ Decision history, outcome tracking, and behavioral performance metrics.
 Every ZELTA recommendation is logged and tracked for learning.
 """
 
-import uuid
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import List
+
 from google.cloud import firestore
+
 from schemas.portfolio import (
-    LogDecisionRequest, UpdateOutcomeRequest,
-    DecisionRecord, PerformanceMetrics, PortfolioSummary,
     DecisionOutcome,
+    DecisionRecord,
+    LogDecisionRequest,
+    PerformanceMetrics,
+    PortfolioSummary,
+    UpdateOutcomeRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,27 +32,30 @@ def _get_portfolio_ref(db: firestore.Client, uid: str) -> firestore.DocumentRefe
     return db.collection("portfolio").document(uid)
 
 
+def _enum_value(value):
+    return value.value if hasattr(value, "value") else value
+
+
 async def log_decision(
     db: firestore.Client, uid: str, request: LogDecisionRequest
 ) -> DecisionRecord:
     """Log a ZELTA decision recommendation to the portfolio."""
-
     decision_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
     record = {
         "id": decision_id,
-        "verdict": request.verdict,
-        "amount": request.amount,
+        "verdict": _enum_value(request.verdict),
+        "amount": float(request.amount),
         "rationale": request.rationale,
-        "stress_index": request.stress_index_at_decision,
-        "bayse_fear": request.bayse_fear_at_decision,
+        "stress_index": float(request.stress_index_at_decision),
+        "bayse_fear": float(request.bayse_fear_at_decision),
         "bias": request.bias_at_decision,
-        "decision_score": request.decision_score,
+        "decision_score": float(request.decision_score),
         "category": request.category,
         "notes": request.notes,
         "actual_outcome": None,
-        "outcome_label": DecisionOutcome.PENDING,
+        "outcome_label": DecisionOutcome.PENDING.value,
         "return_amount": None,
         "return_percentage": None,
         "created_at": now,
@@ -56,26 +64,30 @@ async def log_decision(
 
     _get_decisions_ref(db, uid).document(decision_id).set(record)
 
-    # Update portfolio aggregate
     portfolio_ref = _get_portfolio_ref(db, uid)
     portfolio_doc = portfolio_ref.get()
+
     if portfolio_doc.exists:
-        portfolio_ref.update({
-            "total_decisions": firestore.Increment(1),
-            "total_invested": firestore.Increment(request.amount),
-            "updated_at": now,
-        })
+        portfolio_ref.update(
+            {
+                "total_decisions": firestore.Increment(1),
+                "total_invested": firestore.Increment(float(request.amount)),
+                "updated_at": now,
+            }
+        )
     else:
-        portfolio_ref.set({
-            "uid": uid,
-            "total_decisions": 1,
-            "total_invested": request.amount,
-            "total_returned": 0.0,
-            "correct_decisions": 0,
-            "incorrect_decisions": 0,
-            "created_at": now,
-            "updated_at": now,
-        })
+        portfolio_ref.set(
+            {
+                "uid": uid,
+                "total_decisions": 1,
+                "total_invested": float(request.amount),
+                "total_returned": 0.0,
+                "correct_decisions": 0,
+                "incorrect_decisions": 0,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
 
     return DecisionRecord(**record)
 
@@ -84,7 +96,6 @@ async def update_outcome(
     db: firestore.Client, uid: str, request: UpdateOutcomeRequest
 ) -> DecisionRecord:
     """Update the actual outcome of a previously logged decision."""
-
     decision_ref = _get_decisions_ref(db, uid).document(request.decision_id)
     doc = decision_ref.get()
 
@@ -94,14 +105,14 @@ async def update_outcome(
     existing = doc.to_dict()
     now = datetime.now(timezone.utc)
 
-    # Compute return
-    invested = existing.get("amount", 0.0)
-    return_amount = request.actual_outcome - invested
+    invested = float(existing.get("amount", 0.0))
+    actual_outcome = float(request.actual_outcome)
+    return_amount = actual_outcome - invested
     return_pct = round((return_amount / invested * 100), 2) if invested > 0 else 0.0
 
     updates = {
-        "actual_outcome": request.actual_outcome,
-        "outcome_label": request.outcome_label,
+        "actual_outcome": actual_outcome,
+        "outcome_label": _enum_value(request.outcome_label),
         "return_amount": return_amount,
         "return_percentage": return_pct,
         "resolved_at": now,
@@ -110,12 +121,12 @@ async def update_outcome(
 
     decision_ref.update(updates)
 
-    # Update portfolio aggregate
     portfolio_ref = _get_portfolio_ref(db, uid)
     portfolio_updates = {
-        "total_returned": firestore.Increment(request.actual_outcome),
+        "total_returned": firestore.Increment(actual_outcome),
         "updated_at": now,
     }
+
     if request.outcome_label == DecisionOutcome.CORRECT:
         portfolio_updates["correct_decisions"] = firestore.Increment(1)
     elif request.outcome_label == DecisionOutcome.INCORRECT:
@@ -123,25 +134,24 @@ async def update_outcome(
 
     portfolio_ref.update(portfolio_updates)
 
-    return DecisionRecord(**{**existing, **updates})
+    merged = {**existing, **updates}
+    return DecisionRecord(**merged)
 
 
 async def get_portfolio_summary(db: firestore.Client, uid: str) -> PortfolioSummary:
     """Get full portfolio with performance metrics and recent decisions."""
-
     portfolio_doc = _get_portfolio_ref(db, uid).get()
     agg = portfolio_doc.to_dict() if portfolio_doc.exists else {}
 
-    total_decisions = agg.get("total_decisions", 0)
-    correct = agg.get("correct_decisions", 0)
-    incorrect = agg.get("incorrect_decisions", 0)
-    pending = total_decisions - correct - incorrect
-    total_invested = agg.get("total_invested", 0.0)
-    total_returned = agg.get("total_returned", 0.0)
+    total_decisions = int(agg.get("total_decisions", 0))
+    correct = int(agg.get("correct_decisions", 0))
+    incorrect = int(agg.get("incorrect_decisions", 0))
+    pending = max(0, total_decisions - correct - incorrect)
+    total_invested = float(agg.get("total_invested", 0.0))
+    total_returned = float(agg.get("total_returned", 0.0))
 
     accuracy_rate = round((correct / max(1, correct + incorrect)) * 100, 1)
 
-    # Fetch recent decisions
     decision_docs = (
         _get_decisions_ref(db, uid)
         .order_by("created_at", direction=firestore.Query.DESCENDING)
@@ -152,15 +162,16 @@ async def get_portfolio_summary(db: firestore.Client, uid: str) -> PortfolioSumm
     recent_decisions = [DecisionRecord(**d) for d in decisions_raw]
 
     avg_decision_score = (
-        sum(d.decision_score for d in recent_decisions) / len(recent_decisions)
-        if recent_decisions else 0.0
+        sum(float(d.decision_score) for d in recent_decisions) / len(recent_decisions)
+        if recent_decisions
+        else 0.0
     )
-    best_score = max((d.decision_score for d in recent_decisions), default=0.0)
+    best_score = max((float(d.decision_score) for d in recent_decisions), default=0.0)
 
-    # Behavioral pattern summary
     bias_counts: dict = {}
     for d in recent_decisions:
         bias_counts[d.bias] = bias_counts.get(d.bias, 0) + 1
+
     dominant_bias = max(bias_counts, key=bias_counts.get) if bias_counts else "NONE"
 
     pattern_summary = (
@@ -192,8 +203,12 @@ async def get_portfolio_summary(db: firestore.Client, uid: str) -> PortfolioSumm
 
 def _compute_bayse_gap(decisions: List[DecisionRecord]) -> float:
     """Compute average gap between Bayse crowd fear and actual outcomes."""
-    resolved = [d for d in decisions if d.outcome_label != DecisionOutcome.PENDING]
+    resolved = [
+        d for d in decisions
+        if d.outcome_label != DecisionOutcome.PENDING
+    ]
     if not resolved:
         return 0.0
-    gaps = [abs(d.bayse_fear - d.decision_score * 20) for d in resolved]
+
+    gaps = [abs(float(d.bayse_fear) - float(d.decision_score) * 20.0) for d in resolved]
     return round(sum(gaps) / len(gaps), 2)
