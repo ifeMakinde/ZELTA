@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from config.settings import settings
 from core.firebase import initialize_firebase
 from middleware.cors import setup_cors
-from routes import intelligence, wallet, simulation, copilot, portfolio, profile
+from routes import intelligence, wallet, simulation, copilot, portfolio, profile, dev_auth
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -41,9 +41,9 @@ async def lifespan(app: FastAPI):
     try:
         initialize_firebase()
         logger.info("Firebase initialized. BQ Brain ready.")
-    except Exception as e:
+    except Exception:
         logger.critical("Failed to initialize Firebase.", exc_info=True)
-        raise e
+        raise
     yield
     logger.info("ZELTA Backend shutting down.")
 
@@ -71,6 +71,7 @@ app.include_router(simulation.router)
 app.include_router(copilot.router)
 app.include_router(portfolio.router)
 app.include_router(profile.router)
+app.include_router(dev_auth.router)
 
 
 # ─── Health Check ─────────────────────────────────────────────────────────────
@@ -96,14 +97,12 @@ async def health():
 # ─── Global Exception Handler ─────────────────────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    # Preserve HTTPException status/details when possible
     if isinstance(exc, HTTPException):
         return JSONResponse(
             status_code=exc.status_code,
             content={"success": False, "message": exc.detail},
         )
 
-    # Log stack trace for internal errors
     logger.error("Unhandled exception on %s", request.url, exc_info=True)
 
     return JSONResponse(
