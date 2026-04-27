@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/wallet", tags=["Wallet"])
 
-
 @router.get("", response_model=WalletResponse)
 async def get_wallet(current_user: CurrentUser, db: DB):
     """
@@ -30,7 +29,6 @@ async def get_wallet(current_user: CurrentUser, db: DB):
         logger.error(f"Wallet GET error for {current_user['uid']}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-
 @router.post("/income")
 async def income(current_user: CurrentUser, db: DB, request: AddIncomeRequest):
     """
@@ -46,7 +44,6 @@ async def income(current_user: CurrentUser, db: DB, request: AddIncomeRequest):
         logger.error(f"Add income error: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-
 @router.post("/expense")
 async def expense(current_user: CurrentUser, db: DB, request: AddExpenseRequest):
     """
@@ -60,7 +57,6 @@ async def expense(current_user: CurrentUser, db: DB, request: AddExpenseRequest)
     except Exception as e:
         logger.error(f"Add expense error: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
 
 @router.post("/lock")
 async def lock(current_user: CurrentUser, db: DB, request: LockSavingsRequest):
