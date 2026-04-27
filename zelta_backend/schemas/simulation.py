@@ -10,7 +10,20 @@ class SimulationType(str, Enum):
 
 
 class SideHustleSimRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+    model_config = ConfigDict(
+        extra="ignore",
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "investment_amount": 50000,
+                "hustle_type": "reselling",
+                "expected_revenue_min": 70000,
+                "expected_revenue_max": 120000,
+                "time_horizon_weeks": 4,
+                "fixed_costs": 15000,
+            }
+        },
+    )
 
     investment_amount: float = Field(..., gt=0, description="Amount to invest in NGN")
     hustle_type: str = Field(..., description="Type of side hustle e.g. catering, reselling")
