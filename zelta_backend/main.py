@@ -26,6 +26,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def is_debug_mode() -> bool:
+    """
+    Safe debug check that works even if settings changes later.
+    """
+    return getattr(settings, "debug", False) or getattr(settings, "app_env", "").lower() == "development"
+
+
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,8 +42,8 @@ async def lifespan(app: FastAPI):
         initialize_firebase()
         logger.info("Firebase initialized. BQ Brain ready.")
     except Exception as e:
-        logger.error(f"Failed to initialize Firebase: {e}")
-        # Depending on criticality, you might want to raise e here to stop startup
+        logger.critical("Failed to initialize Firebase.", exc_info=True)
+        raise e
     yield
     logger.info("ZELTA Backend shutting down.")
 
@@ -89,36 +96,34 @@ async def health():
 # ─── Global Exception Handler ─────────────────────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    # If the error is a standard FastAPI/Starlette HTTPException (like 404 or 401),
-    # return its intended status code and message instead of a generic 500.
+    # Preserve HTTPException status/details when possible
     if isinstance(exc, HTTPException):
         return JSONResponse(
             status_code=exc.status_code,
             content={"success": False, "message": exc.detail},
         )
 
-    # Log the actual stack trace for real internal server errors
-    logger.error(f"Unhandled exception on {request.url}: {exc}", exc_info=True)
-    
+    # Log stack trace for internal errors
+    logger.error("Unhandled exception on %s", request.url, exc_info=True)
+
     return JSONResponse(
         status_code=500,
         content={
             "success": False,
             "message": "An unexpected error occurred.",
-            "detail": str(exc) if settings.DEBUG else "Internal Server Error",
+            "detail": str(exc) if is_debug_mode() else "Internal Server Error",
         },
     )
 
 
 # ─── Dev Server ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # Ensure the file is named main.py for the string import to work
     port = int(os.environ.get("PORT", 8080))
-    
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=port,
         log_level="info",
-        reload=True if settings.DEBUG else False
+        reload=is_debug_mode(),
     )
