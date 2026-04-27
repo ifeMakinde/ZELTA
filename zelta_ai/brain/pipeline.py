@@ -48,7 +48,8 @@ class ZeltaPipeline:
 
     def _validate_wallet(self, wallet_data: Optional[Dict[str, Any]]) -> Dict[str, float]:
         """
-        Ensure wallet is always valid (comes from USER)
+        Ensure wallet is always valid (comes from USER).
+        Supports both locked_total and locked_amount for compatibility.
         """
         if not wallet_data:
             return {
@@ -57,9 +58,11 @@ class ZeltaPipeline:
                 "total_balance": 10000.0,
             }
 
+        locked_value = wallet_data.get("locked_total", wallet_data.get("locked_amount", 0.0))
+
         return {
             "free_cash": float(wallet_data.get("free_cash", 0.0)),
-            "locked_total": float(wallet_data.get("locked_total", 0.0)),
+            "locked_total": float(locked_value),
             "total_balance": float(wallet_data.get("total_balance", 0.0)),
         }
 
@@ -82,7 +85,6 @@ class ZeltaPipeline:
             # 2. NLP
             news_payload = await self._load_news_payload(bayse_data)
             nlp_data = self.nlp.run(news_payload)
-
             aggregate_sentiment = nlp_data.get("aggregate_sentiment", 0.0)
 
             # 3. STRESS
@@ -165,5 +167,27 @@ class ZeltaPipeline:
                 }
             }
 
-    def run(self, wallet_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        return asyncio.run(self.run_async(wallet_data))
+    def run(
+        self,
+        wallet_data: Optional[Dict[str, Any]] = None,
+        transactions: Optional[List[Dict[str, Any]]] = None,
+        user_context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Synchronous wrapper for environments that are not already running an event loop.
+
+        If you're already inside async code (for example, a FastAPI route),
+        call `await run_async(...)` instead of this method.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            raise RuntimeError(
+                "run() cannot be used inside an active event loop. "
+                "Use `await run_async(...)` instead."
+            )
+
+        return asyncio.run(self.run_async(wallet_data, transactions, user_context))
