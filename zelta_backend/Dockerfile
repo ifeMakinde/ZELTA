@@ -7,15 +7,15 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for layer caching
+# Copy requirements first (better caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy app
 COPY . .
 
-# Expose port
-EXPOSE 8080
+# Cloud Run requires dynamic PORT
+ENV PORT=8080
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# 🔥 CRITICAL FIX: use shell form so $PORT is read
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]
