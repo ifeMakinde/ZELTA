@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SimulationType(str, Enum):
@@ -9,6 +10,8 @@ class SimulationType(str, Enum):
 
 
 class SideHustleSimRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     investment_amount: float = Field(..., gt=0, description="Amount to invest in NGN")
     hustle_type: str = Field(..., description="Type of side hustle e.g. catering, reselling")
     expected_revenue_min: float = Field(..., gt=0)
@@ -18,28 +21,36 @@ class SideHustleSimRequest(BaseModel):
 
 
 class SavingsSimRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     weekly_savings_amount: float = Field(..., gt=0)
     target_amount: float = Field(..., gt=0)
-    upcoming_obligations: Optional[List[dict]] = []
+    upcoming_obligations: List[dict] = Field(default_factory=list)
 
 
 class WeekOutcome(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     week: int
     projected_balance: float
-    status: str  # "green", "amber", "red"
+    status: str  # green / amber / red
     risk_level: float
 
 
 class MonteCarloResult(BaseModel):
-    p10: float  # 10th percentile outcome
-    p50: float  # Median outcome
-    p90: float  # 90th percentile outcome
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    p10: float
+    p50: float
+    p90: float
     mean: float
     std_dev: float
     success_probability: float
 
 
 class SideHustleSimResult(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     recommended_investment: float
     kelly_adjusted_amount: float
     decision_score: float
@@ -55,11 +66,13 @@ class SideHustleSimResult(BaseModel):
 
 
 class SavingsSimResult(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     weeks_to_target: int
     weekly_surplus: float
     obligation_risk_map: List[WeekOutcome]
     projected_shortfall: float
-    savings_score: float  # Sharpe-style 0-5
+    savings_score: float
     green_weeks: int
     amber_weeks: int
     red_weeks: int
@@ -68,6 +81,8 @@ class SavingsSimResult(BaseModel):
 
 
 class SimulationResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     success: bool
     simulation_type: SimulationType
     data: dict
