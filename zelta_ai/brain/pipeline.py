@@ -26,7 +26,6 @@ class ZeltaPipeline:
     """
 
     def __init__(self):
-        # IMPORTANT: use the shared singleton monitor
         self.bayse = monitor
         self.nlp = ZeltaSentimentScorer()
         self.bias = ZeltaBiasDetector()
@@ -79,51 +78,42 @@ class ZeltaPipeline:
             transactions = transactions or []
             user_context = user_context or {}
 
-            # 1. PRIMARY SIGNAL
             bayse_data = self.bayse.get_signal()
 
-            # 2. NLP
             news_payload = await self._load_news_payload(bayse_data)
             nlp_data = self.nlp.run(news_payload)
             aggregate_sentiment = nlp_data.get("aggregate_sentiment", 0.0)
 
-            # 3. STRESS
             stress_data = run_stress_index(
                 bayse_data,
                 aggregate_sentiment,
             )
 
-            # 4. BIAS
             bias_data = self.bias.run(
                 stress_data,
                 aggregate_sentiment,
                 wallet_data,
             )
 
-            # 5. BAYESIAN
             bayesian_data = run_bayesian_engine(
                 stress_data,
                 bias_data,
             )
 
-            # 6. CONFIDENCE
             confidence_data = run_confidence_scorer(
                 bayesian_data,
                 stress_data,
                 bias_data,
             )
 
-            # 7. KELLY
             kelly_data = run_kelly_allocator(
                 bayesian_data,
                 confidence_data,
                 wallet_data,
             )
 
-            # 8. SHARPE
             sharpe_data = self.sharpe.run(bayesian_data)
 
-            # 9. COPILOT
             explanation = await self.copilot.run(
                 {
                     "bayse": bayse_data,
@@ -134,7 +124,7 @@ class ZeltaPipeline:
                     "confidence": confidence_data,
                     "allocation": kelly_data,
                     "sharpe": sharpe_data,
-                    "score": sharpe_data,  # backward compatibility
+                    "score": sharpe_data,
                     "transactions": transactions,
                     "user_context": user_context,
                 }
@@ -175,9 +165,7 @@ class ZeltaPipeline:
     ) -> Dict[str, Any]:
         """
         Synchronous wrapper for environments that are not already running an event loop.
-
-        If you're already inside async code (for example, a FastAPI route),
-        call `await run_async(...)` instead of this method.
+        If you're already inside async code, call `await run_async(...)` instead.
         """
         try:
             loop = asyncio.get_running_loop()
