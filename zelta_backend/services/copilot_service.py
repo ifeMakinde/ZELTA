@@ -63,6 +63,10 @@ def _safe_str(value: Any, default: str = "") -> str:
     return str(value)
 
 
+def _safe_list(value: Any) -> List[Any]:
+    return value if isinstance(value, list) else []
+
+
 def _extract_json(text: str) -> Dict[str, Any]:
     """
     Gemini may return plain JSON or JSON wrapped in markdown fences.
@@ -93,8 +97,7 @@ def _normalize_brain_context(brain_context: dict) -> dict:
 
     Returns the nested shape expected by the Co-Pilot prompt builder.
     """
-    if not brain_context:
-        brain_context = {}
+    brain_context = brain_context or {}
 
     if "stress" in brain_context or "bias" in brain_context or "allocation" in brain_context:
         return brain_context
@@ -247,6 +250,33 @@ USER QUESTION:
 """.strip()
 
 
+def _coerce_verdict_amount(value: Any) -> float | None:
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    # remove common currency symbols and commas
+    text = re.sub(r"[₦,$\s]", "", text)
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _safe_sources(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(v) for v in value if v is not None]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return ["Bayse Markets", "Wallet Data", "BQ Engine"]
+
+
 async def answer_question(
     db: firestore.Client,
     uid: str,
@@ -257,6 +287,8 @@ async def answer_question(
     """
     Send user question to Gemini with full BQ context and return structured answer.
     """
+    _ = (db, uid)  # reserved for future chat history persistence
+
     brain_context = _normalize_brain_context(brain_context)
     context_pills = _build_context_pills(brain_context, wallet_context)
     context_block = _build_context_block(request, brain_context, wallet_context)
@@ -278,6 +310,9 @@ async def answer_question(
     )
 
     try:
+        if not settings.gemini_api_key:
+            raise RuntimeError("Missing GEMINI_API_KEY")
+
         url = GEMINI_API_URL.format(model=settings.gemini_model)
         payload = {
             "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
@@ -299,19 +334,20 @@ async def answer_question(
             resp.raise_for_status()
             data = resp.json()
 
-        raw_text = (
-            data["candidates"][0]["content"]["parts"][0].get("text", "")
-            if data.get("candidates")
-            else ""
-        )
+        raw_text = ""
+        if isinstance(data, dict) and data.get("candidates"):
+            try:
+                raw_text = data["candidates"][0]["content"]["parts"][0].get("text", "")
+            except (KeyError, IndexError, TypeError):
+                raw_text = ""
+
         parsed = _extract_json(raw_text)
 
         verdict = _safe_str(parsed.get("verdict"), "HOLD").upper()
         if verdict not in {"SAVE", "INVEST", "HOLD"}:
             verdict = "HOLD"
 
-        verdict_amount = parsed.get("verdict_amount")
-        verdict_amount = float(verdict_amount) if verdict_amount is not None else None
+        verdict_amount = _coerce_verdict_amount(parsed.get("verdict_amount"))
 
         return CopilotResponse(
             answer=_safe_str(
@@ -319,18 +355,18 @@ async def answer_question(
                 "I could not generate a response just now. Please try again.",
             ),
             verdict=verdict,
-            verdict_amount=verdict_amount,
+            verdict_amount=verdict_amount if verdict != "HOLD" else 0.0,
             context_pills=context_pills,
             confidence=max(0.0, min(100.0, _safe_float(parsed.get("confidence", 70.0), 70.0))),
-            sources=parsed.get("sources", ["Bayse Markets", "Wallet Data", "BQ Engine"]),
+            sources=_safe_sources(parsed.get("sources")),
         )
 
     except httpx.HTTPStatusError as e:
         logger.error("Gemini API error %s: %s", e.response.status_code, e.response.text)
         return _fallback_response(brain_context, wallet_context, context_pills)
 
-    except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
-        logger.error("Gemini response parsing error: %s", e)
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError, RuntimeError) as e:
+        logger.error("Copilot parsing/config error: %s", e)
         return _fallback_response(brain_context, wallet_context, context_pills)
 
     except Exception as e:
