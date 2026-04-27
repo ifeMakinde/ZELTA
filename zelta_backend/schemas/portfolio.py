@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DecisionOutcome(str, Enum):
@@ -12,6 +13,8 @@ class DecisionOutcome(str, Enum):
 
 
 class LogDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     verdict: str  # SAVE / INVEST / HOLD
     amount: float = Field(..., gt=0)
     rationale: str
@@ -24,6 +27,8 @@ class LogDecisionRequest(BaseModel):
 
 
 class UpdateOutcomeRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     decision_id: str
     actual_outcome: float
     outcome_label: DecisionOutcome
@@ -31,6 +36,8 @@ class UpdateOutcomeRequest(BaseModel):
 
 
 class DecisionRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     id: str
     verdict: str
     amount: float
@@ -50,6 +57,8 @@ class DecisionRecord(BaseModel):
 
 
 class PerformanceMetrics(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     total_decisions: int
     correct_decisions: int
     incorrect_decisions: int
@@ -64,11 +73,15 @@ class PerformanceMetrics(BaseModel):
 
 
 class PortfolioSummary(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     metrics: PerformanceMetrics
-    recent_decisions: List[DecisionRecord]
+    recent_decisions: List[DecisionRecord] = Field(default_factory=list)
     behavioral_pattern_summary: str
 
 
 class PortfolioResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     success: bool
     data: PortfolioSummary
