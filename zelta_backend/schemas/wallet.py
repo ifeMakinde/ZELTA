@@ -1,15 +1,13 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
-
 
 class TransactionType(str, Enum):
     INCOME = "income"
     EXPENSE = "expense"
     LOCK = "lock"
     UNLOCK = "unlock"
-
 
 class TransactionCategory(str, Enum):
     FOOD = "food"
@@ -25,13 +23,11 @@ class TransactionCategory(str, Enum):
     UTILITIES = "utilities"
     OTHER = "other"
 
-
 class AddIncomeRequest(BaseModel):
     amount: float = Field(..., gt=0, description="Amount in NGN")
     source: TransactionCategory
     description: Optional[str] = None
     date: Optional[datetime] = None
-
 
 class AddExpenseRequest(BaseModel):
     amount: float = Field(..., gt=0, description="Amount in NGN")
@@ -39,13 +35,11 @@ class AddExpenseRequest(BaseModel):
     description: Optional[str] = None
     date: Optional[datetime] = None
 
-
 class LockSavingsRequest(BaseModel):
     amount: float = Field(..., gt=0, description="Amount in NGN to lock")
     label: str = Field(..., min_length=1, max_length=100)
     unlock_date: datetime
     description: Optional[str] = None
-
 
 class Transaction(BaseModel):
     id: str
@@ -56,7 +50,6 @@ class Transaction(BaseModel):
     date: datetime
     balance_after: float
 
-
 class SavingsGoal(BaseModel):
     id: str
     label: str
@@ -66,13 +59,11 @@ class SavingsGoal(BaseModel):
     created_at: datetime
     is_active: bool = True
 
-
 class SpendingHeatItem(BaseModel):
     category: TransactionCategory
     amount: float
     percentage: float
     status: str  # "green", "amber", "red"
-
 
 class WalletSummary(BaseModel):
     total_balance: float
@@ -86,6 +77,11 @@ class WalletSummary(BaseModel):
     spending_heat: List[SpendingHeatItem]
     bq_alerts: List[str]
 
+    @computed_field
+    @property
+    def locked_total(self) -> float:
+        """Alias for locked_amount to prevent attribute errors."""
+        return self.locked_amount
 
 class WalletResponse(BaseModel):
     success: bool
