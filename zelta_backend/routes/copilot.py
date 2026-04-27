@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
+import logging
+
 from core.dependencies import CurrentUser, DB
 from services.copilot_service import answer_question
 from services.intelligence_service import get_intelligence
 from services.wallet_service import get_wallet_summary
 from schemas.copilot import CopilotRequest, CopilotAPIResponse
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -29,37 +30,21 @@ async def ask_copilot(
     Always returns a SAVE / INVEST / HOLD verdict in NGN.
     Max response: 120 words. No jargon.
     """
-    try:
-        uid = current_user["uid"]
+    uid = current_user["uid"]
 
-        # Load current BQ brain state
+    try:
         try:
             brain = await get_intelligence(db, uid)
-            brain_context = {
-                "stress":      brain.stress.model_dump(),
-                "bias":        brain.bias.model_dump(),
-                "decision":    brain.decision.model_dump(),
-                "confidence":  brain.confidence.model_dump(),
-                "allocation":  brain.allocation.model_dump(),
-                "score":       brain.score.model_dump(),
-                "bayse":       brain.bayse.model_dump(),
-                "explanation": brain.explanation.model_dump(),
-            }
+            brain_context = brain.model_dump()
         except Exception as e:
-            logger.warning(f"Brain context load failed for copilot: {e}")
+            logger.warning("Brain context load failed for copilot uid=%s: %s", uid, e)
             brain_context = {}
 
-        # Load wallet state
         try:
             wallet = await get_wallet_summary(db, uid)
-            wallet_context = {
-                "total_balance": wallet.total_balance,
-                "free_cash": wallet.free_cash,
-                "locked_amount": wallet.locked_amount,
-                "weekly_burn_rate": wallet.weekly_burn_rate,
-            }
+            wallet_context = wallet.model_dump()
         except Exception as e:
-            logger.warning(f"Wallet context load failed for copilot: {e}")
+            logger.warning("Wallet context load failed for copilot uid=%s: %s", uid, e)
             wallet_context = {}
 
         response = await answer_question(
@@ -73,5 +58,8 @@ async def ask_copilot(
         return CopilotAPIResponse(success=True, data=response)
 
     except Exception as e:
-        logger.error(f"Copilot error for {current_user['uid']}: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        logger.error("Copilot error for %s: %s", uid, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
