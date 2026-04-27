@@ -42,12 +42,37 @@ def _safe_event_title(event: Dict[str, Any]) -> str:
 
 
 def _safe_market_id(market: Dict[str, Any]) -> Optional[str]:
-    return market.get("id") or market.get("marketId")
+    return market.get("id") or market.get("marketId") or market.get("market_id")
+
+
+def _extract_events(raw: Any) -> List[Dict[str, Any]]:
+    if isinstance(raw, list):
+        return [item for item in raw if isinstance(item, dict)]
+
+    if not isinstance(raw, dict):
+        return []
+
+    candidates = (
+        raw.get("data"),
+        raw.get("events"),
+        raw.get("items"),
+        raw.get("results"),
+    )
+
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return [item for item in candidate if isinstance(item, dict)]
+        if isinstance(candidate, dict):
+            nested = candidate.get("events") or candidate.get("items") or candidate.get("results")
+            if isinstance(nested, list):
+                return [item for item in nested if isinstance(item, dict)]
+
+    return []
 
 
 @router.get("/health")
 def health():
-    signal = monitor.get_signal()
+    signal = monitor.get_signal() or {}
 
     return {
         "status": "ok",
@@ -76,8 +101,8 @@ async def get_intelligence(
         enriched_wallet = {
             **wallet_dict,
             "transaction_count": len(transactions),
-            "has_expenses": any(t["type"] == "expense" for t in transactions),
-            "has_income": any(t["type"] == "income" for t in transactions),
+            "has_expenses": any(str(t.get("type", "")).lower() in {"expense", "debit"} for t in transactions),
+            "has_income": any(str(t.get("type", "")).lower() in {"income", "credit"} for t in transactions),
             "user_flags": user_context.get("flags", []),
         }
 
@@ -146,7 +171,7 @@ async def get_intelligence(
 
 @public_router.get("/api/stress")
 async def get_stress():
-    signal = monitor.get_signal()
+    signal = monitor.get_signal() or {}
 
     return {
         "score": signal.get("score", 50),
@@ -172,14 +197,15 @@ async def get_stress():
 @public_router.get("/api/markets")
 async def get_markets():
     try:
-        events = await monitor.client.get_events()
+        events_resp = await monitor.client.get_events()
+        events = _extract_events(events_resp)
 
         markets = []
         for event in events[:25]:
             event_title = _safe_event_title(event)
             category = event.get("category")
             liquidity = event.get("liquidity")
-            created_at = event.get("createdAt")
+            created_at = event.get("createdAt") or event.get("created_at")
 
             for market in event.get("markets", []):
                 market_id = _safe_market_id(market)
