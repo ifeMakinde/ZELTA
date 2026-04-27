@@ -1,32 +1,33 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
-import os
+
 
 class Settings(BaseSettings):
-    # ─── App Logic ────────────────────────────────────────────────────────────
-    app_env: str = "development"
-    debug: bool = True  # Added this to support your main.py logic
+    # App Logic
+    app_env: str = Field(default="development", alias="APP_ENV")
+    debug: bool = Field(default=False, alias="DEBUG")
     app_host: str = "0.0.0.0"
     app_port: int = 8080
     allowed_origins: str = "*"
 
-    # ─── Firebase ─────────────────────────────────────────────────────────────
+    # Firebase
     firebase_project_id: str = "zelta-77e9c"
-    firebase_service_account_path: str = "./serviceAccountKey.json"
-    firebase_api_key: str = ""
+    firebase_api_key: str = Field(default="", alias="FIREBASE_API_KEY")
+    firebase_service_account_json: str = Field(default="", alias="FIREBASE_SERVICE_ACCOUNT_JSON")
 
-    # ─── Google Cloud / Vertex AI ─────────────────────────────────────────────
+    # Google Cloud / Vertex AI
     google_cloud_project: str = "zelta"
     google_cloud_region: str = "us-central1"
     vertex_ai_endpoint: str = "https://us-central1-aiplatform.googleapis.com"
 
-    # ─── Gemini & AI Brain ────────────────────────────────────────────────────
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash" 
+    # Gemini & AI Brain
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    gemini_model: str = "gemini-2.5-flash"
     ai_brain_url: str = "https://zelta-ai-990094999937.us-central1.run.app"
-    internal_api_key: str = ""
+    internal_api_key: str = Field(default="", alias="INTERNAL_API_KEY")
 
-    # ─── Financial Constants ──────────────────────────────────────────────────
+    # Financial Constants
     kelly_fraction: float = 0.5
     max_invest_ratio: float = 0.25
     savings_floor_ratio: float = 0.60
@@ -40,11 +41,11 @@ class Settings(BaseSettings):
             return ["*"]
         return [origin.strip() for origin in self.allowed_origins.split(",")]
 
-    # ─── Pydantic Config ──────────────────────────────────────────────────────
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore" # Ignores extra env vars in your .env file
+        extra="ignore",
     )
+
 
 settings = Settings()
