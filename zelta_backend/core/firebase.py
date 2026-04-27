@@ -3,6 +3,7 @@ import logging
 from typing import Any
 import firebase_admin
 from firebase_admin import credentials,auth,firestore
+from google.cloud import firestore
 from google.cloud.firestore import Client
 from config.settings import settings
 
