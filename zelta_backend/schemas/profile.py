@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RiskTolerance(str, Enum):
@@ -17,16 +18,25 @@ class NotificationFrequency(str, Enum):
 
 
 class FinancialProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     monthly_budget: Optional[float] = None
-    fee_obligations: Optional[List[dict]] = []  # [{label, amount, due_date}]
-    income_sources: Optional[List[str]] = []
+    fee_obligations: List[dict] = Field(default_factory=list)  # [{label, amount, due_date}]
+    income_sources: List[str] = Field(default_factory=list)
     side_hustle_type: Optional[str] = None
     hostel_fee: Optional[float] = None
     tuition_amount: Optional[float] = None
     risk_tolerance: RiskTolerance = RiskTolerance.MODERATE
 
+    # compatibility with intelligence_service
+    risk_preference: Optional[str] = None
+    capital_range: Optional[str] = None
+    monthly_income: Optional[float] = None
+
 
 class PreferencesProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     currency: str = "NGN"
     language: str = "en"
     stress_alert_threshold: int = Field(60, ge=0, le=100)
@@ -34,8 +44,15 @@ class PreferencesProfile(BaseModel):
     show_bayse_prices: bool = True
     plain_english_mode: bool = True
 
+    # compatibility with intelligence_service
+    primary_goal: Optional[str] = None
+    decision_aggressiveness: Optional[int] = None
+    stress_sensitivity: Optional[int] = None
+
 
 class NotificationsProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     stress_alerts: bool = True
     weekly_bq_report: bool = True
     decision_reminders: bool = True
@@ -44,6 +61,8 @@ class NotificationsProfile(BaseModel):
 
 
 class UserProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     uid: str
     email: str
     name: str
@@ -51,12 +70,14 @@ class UserProfile(BaseModel):
     university: Optional[str] = None
     department: Optional[str] = None
     level: Optional[str] = None
-    financial: FinancialProfile = FinancialProfile()
-    preferences: PreferencesProfile = PreferencesProfile()
-    notifications: NotificationsProfile = NotificationsProfile()
+    financial: FinancialProfile = Field(default_factory=FinancialProfile)
+    preferences: PreferencesProfile = Field(default_factory=PreferencesProfile)
+    notifications: NotificationsProfile = Field(default_factory=NotificationsProfile)
 
 
 class UpdateProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     name: Optional[str] = None
     university: Optional[str] = None
     department: Optional[str] = None
@@ -67,5 +88,7 @@ class UpdateProfileRequest(BaseModel):
 
 
 class ProfileResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     success: bool
     data: UserProfile
