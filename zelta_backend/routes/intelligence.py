@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Intelligence"])
 
+# ──────────────────────────────────────────────────────────────────────────────
+# PRIMARY ENDPOINTS
+# ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/brain", response_model=IntelligenceResponse)
 async def brain(current_user: CurrentUser, db: DB):
@@ -80,9 +83,9 @@ async def intelligence_full(current_user: CurrentUser, db: DB):
                 "confidence_plain":  result.confidence.plain_english,
                 # Allocation
                 "verdict":           result.allocation.verdict,
-                "invest_ngn":        result.allocation.invest_amount,
-                "save_ngn":          result.allocation.save_amount,
-                "hold_ngn":          result.allocation.hold_amount,
+                "invest_ngn":        result.allocation.invest_ngn,
+                "save_ngn":          result.allocation.save_ngn,
+                "hold_ngn":          result.allocation.hold_ngn,
                 "allocation_pct":    result.allocation.allocation_pct,
                 "allocation_plain":  result.allocation.plain_english,
                 # Score
@@ -123,6 +126,9 @@ async def stress_index(current_user: CurrentUser, db: DB):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
+# ──────────────────────────────────────────────────────────────────────────────
+# BAYSE SPECIFIC ENDPOINTS
+# ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/bayse/markets")
 async def bayse_markets(current_user: CurrentUser, db: DB):
@@ -180,6 +186,7 @@ async def bayse_sentiment(current_user: CurrentUser, db: DB):
     try:
         from optimizer import fetch_bayse_signal
         signal = await fetch_bayse_signal()
+        
         # Panic = weighted combo of crowd yes price + imbalance + score
         panic_score = round(
             signal["crowd_yes_price"] * 40
@@ -187,6 +194,7 @@ async def bayse_sentiment(current_user: CurrentUser, db: DB):
             + signal["score"] * 0.3,
             2,
         )
+        
         return APIResponse(
             success=True,
             message="Bayse sentiment retrieved.",
@@ -204,6 +212,7 @@ async def bayse_sentiment(current_user: CurrentUser, db: DB):
             },
         )
     except Exception as e:
+        logger.error("Bayse sentiment error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
