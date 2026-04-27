@@ -1,22 +1,17 @@
 """
 ZELTA Optimizer — AI Brain HTTP Client
 
-This module is the single point of contact between the ZELTA backend
-and the deployed ZELTA AI Brain.
-
+Single point of contact between ZELTA backend and the deployed Brain.
 It:
   - Calls POST /brain/intelligence
   - Sends wallet_data, transactions, user_context
   - Returns a normalized brain dict
   - Provides Bayse and stress helper fetchers
-  - Never owns intelligence logic itself
-
-The Brain service owns all model logic.
 """
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
 
@@ -27,12 +22,22 @@ logger = logging.getLogger(__name__)
 BRAIN_TIMEOUT = 30.0
 
 
+def _base_url() -> str:
+    return settings.ai_brain_url.rstrip("/")
+
+
+def _brain_url(path: str) -> str:
+    return f"{_base_url()}/{path.lstrip('/')}"
+
+
 def _brain_headers() -> dict:
-    return {
-        "x-api-key": settings.internal_api_key,
+    headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+    if settings.internal_api_key:
+        headers["x-api-key"] = settings.internal_api_key
+    return headers
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -79,7 +84,7 @@ def _safe_list(value: Any) -> list:
 
 def _extract_body(data: Any) -> dict:
     """
-    Handles these shapes:
+    Handles:
       1) {"success": true, "data": {...}}
       2) {"data": {...}}
       3) {...}
@@ -114,10 +119,6 @@ def _brain_payload(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MAIN BRAIN CALL
-# ─────────────────────────────────────────────────────────────────────────────
-
 async def run_brain(
     wallet_data: Optional[dict] = None,
     profile_data: Optional[dict] = None,
@@ -125,16 +126,6 @@ async def run_brain(
 ) -> dict:
     """
     Call the deployed ZELTA AI Brain and return a normalized dict.
-
-    This client matches the Brain pipeline contract:
-      POST /brain/intelligence
-      x-api-key header
-      body: wallet_data, transactions, user_context
-
-    `transaction_patterns` may be either:
-      - {"transactions": [...]}
-      - a raw transaction list
-      - a derived dict of signals to include in user_context
     """
     wallet_data = wallet_data or {}
     profile_data = profile_data or {}
@@ -148,12 +139,11 @@ async def run_brain(
     if isinstance(transaction_patterns, dict):
         if "transactions" in transaction_patterns:
             transactions = _safe_list(transaction_patterns.get("transactions"))
+            extras = {k: v for k, v in transaction_patterns.items() if k != "transactions"}
+            if extras:
+                user_context = {**user_context, **extras}
         else:
-            # Keep derived pattern signals available to the Brain
-            user_context = {
-                **user_context,
-                **transaction_patterns,
-            }
+            user_context = {**user_context, **transaction_patterns}
     elif isinstance(transaction_patterns, list):
         transactions = transaction_patterns
 
@@ -162,7 +152,7 @@ async def run_brain(
     try:
         async with httpx.AsyncClient(timeout=BRAIN_TIMEOUT) as client:
             resp = await client.post(
-                f"{settings.ai_brain_url}/brain/intelligence",
+                _brain_url("/brain/intelligence"),
                 headers=_brain_headers(),
                 json=payload,
             )
@@ -196,30 +186,41 @@ async def run_brain(
         return normalise_brain_response(_fallback_brain_response(free_cash))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CONVENIENCE WRAPPERS
-# ─────────────────────────────────────────────────────────────────────────────
+async def _get_signal_json(paths: Sequence[str], timeout: float = 15.0) -> Tuple[dict, str]:
+    """
+    Try multiple endpoints and return the first usable JSON payload.
+    """
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        last_error = ""
+        for path in paths:
+            try:
+                resp = await client.get(_brain_url(path), headers=_brain_headers())
+
+                if resp.status_code in (401, 403, 404, 422):
+                    last_error = f"{resp.status_code}: {resp.text}"
+                    continue
+
+                resp.raise_for_status()
+                data = resp.json()
+                if isinstance(data, dict):
+                    return data, path
+
+                last_error = f"Non-dict response from {path}"
+            except Exception as exc:
+                last_error = str(exc)
+
+    raise RuntimeError(last_error or "No signal endpoint available")
+
 
 async def fetch_bayse_signal() -> dict:
     """
     Fetch Bayse signal from the Brain service.
     """
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(
-                f"{settings.ai_brain_url}/bayse",
-                headers=_brain_headers(),
-            )
-
-        if resp.status_code in (401, 403, 404):
-            logger.error("Bayse auth/routing failed %s: %s", resp.status_code, resp.text)
-            return _fallback_bayse()
-
-        resp.raise_for_status()
-        data = resp.json()
-        raw = data.get("data", {}).get("bayse", data.get("bayse", {}))
-        return _normalise_bayse(raw)
-
+        data, _ = await _get_signal_json(("/api/stress", "/stress", "/bayse"))
+        raw = data.get("data", data)
+        raw = raw.get("bayse", raw) if isinstance(raw, dict) else raw
+        return _normalise_bayse(raw if isinstance(raw, dict) else {})
     except Exception as e:
         logger.warning("Bayse-only fetch failed: %s", e)
         return _fallback_bayse()
@@ -230,34 +231,20 @@ async def fetch_stress_signal() -> dict:
     Fetch stress index from the Brain service.
     """
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(
-                f"{settings.ai_brain_url}/stress",
-                headers=_brain_headers(),
-            )
-
-        if resp.status_code in (401, 403, 404):
-            logger.error("Stress auth/routing failed %s: %s", resp.status_code, resp.text)
-            return _fallback_stress()
-
-        resp.raise_for_status()
-        data = resp.json()
-        raw = data.get("data", {}).get("stress", data.get("stress", {}))
-        return _normalise_stress(raw)
-
+        data, _ = await _get_signal_json(("/api/stress", "/stress"))
+        raw = data.get("data", data)
+        raw = raw.get("stress", raw) if isinstance(raw, dict) else raw
+        return _normalise_stress(raw if isinstance(raw, dict) else {})
     except Exception as e:
         logger.warning("Stress-only fetch failed: %s", e)
         return _fallback_stress()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# NORMALIZERS
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _normalise_bayse(raw: dict) -> dict:
     raw = raw or {}
     score = _safe_float(raw.get("score", 50.0))
     mid_price = _safe_float(raw.get("mid_price", 0.5))
+    yes_prob = _safe_float(raw.get("naira_weakness_probability", round(mid_price * 100, 2)), round(mid_price * 100, 2))
 
     return {
         "score": score,
@@ -274,11 +261,11 @@ def _normalise_bayse(raw: dict) -> dict:
         "volume24h": _safe_float(raw.get("volume24h", 0.0)),
         "trade_count_24h": _safe_int(raw.get("trade_count_24h", 0)),
         "available": _safe_bool(raw.get("available", True)),
-        "raw_crowd_stress": score,
-        "naira_weakness_probability": round(mid_price * 100, 2),
+        "raw_crowd_stress": _safe_float(raw.get("raw_crowd_stress", score)),
+        "naira_weakness_probability": yes_prob,
         "cbn_rate_fear_index": score,
         "inflation_anxiety_score": score,
-        "usd_ngn_threshold_probability": round(mid_price * 100, 2),
+        "usd_ngn_threshold_probability": yes_prob,
     }
 
 
@@ -369,7 +356,6 @@ def normalise_brain_response(raw_data: dict) -> dict:
     """
     raw_data = raw_data or {}
 
-    # If the Brain returns the flat intelligence report, convert it.
     if any(
         k in raw_data
         for k in (
