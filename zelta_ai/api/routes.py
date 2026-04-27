@@ -1,6 +1,7 @@
 import time
 import uuid
 import logging
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -9,14 +10,31 @@ from pydantic import BaseModel, Field
 from security import verify_internal_request
 from brain.pipeline import ZeltaPipeline
 from brain.bayse.stress_signal import monitor
+from brain.copilot import ZeltaCopilot
+
 
 logger = logging.getLogger("zelta.api")
 
-router = APIRouter(prefix="/brain", tags=["AI Brain"])
+# Versioned router (future-proof)
+router = APIRouter(prefix="/brain/v1", tags=["AI Brain"])
 public_router = APIRouter(tags=["Public API"])
 
 pipeline = ZeltaPipeline()
 
+# Lazy-loaded Copilot (prevents crash if env not ready)
+_copilot: Optional[ZeltaCopilot] = None
+
+
+def get_copilot() -> ZeltaCopilot:
+    global _copilot
+    if _copilot is None:
+        _copilot = ZeltaCopilot()
+    return _copilot
+
+
+# =========================
+# REQUEST MODELS
+# =========================
 
 class WalletData(BaseModel):
     free_cash: float = Field(default=26500.0, ge=0)
@@ -36,6 +54,15 @@ class BrainRequest(BaseModel):
     transactions: List[Transaction] = Field(default_factory=list)
     user_context: Dict[str, Any] = Field(default_factory=dict)
 
+
+class CopilotQuestionRequest(BaseModel):
+    question: str = Field(..., min_length=3)
+    context: Dict[str, Any] = Field(default_factory=dict)
+
+
+# =========================
+# HELPERS
+# =========================
 
 def _safe_event_title(event: Dict[str, Any]) -> str:
     return event.get("title") or event.get("name") or event.get("description") or "Unknown"
@@ -69,6 +96,10 @@ def _extract_events(raw: Any) -> List[Dict[str, Any]]:
 
     return []
 
+
+# =========================
+# CORE ENDPOINTS
+# =========================
 
 @router.get("/health")
 def health():
@@ -146,28 +177,57 @@ async def get_intelligence(
             "error": str(exc),
             "meta": {"status": "error"},
             "data": {
-                "allocation": {
-                    "verdict": "HOLD",
-                    "invest_ngn": 0,
-                    "save_ngn": 0,
-                    "hold_ngn": 0,
-                    "plain_english": "System error. Holding funds for safety.",
-                },
-                "confidence": {
-                    "confidence_score_100": 0,
-                    "is_actionable": False,
-                },
-                "stress": {
-                    "score": 50,
-                    "level": "UNKNOWN",
-                },
-                "bias": {
-                    "bias": "Unknown",
-                    "confidence": "Low",
-                },
+                "allocation": {"verdict": "HOLD"},
+                "confidence": {"is_actionable": False},
+                "stress": {"score": 50, "level": "UNKNOWN"},
+                "bias": {"bias": "Unknown"},
             },
         }
 
+
+# =========================
+# COPILOT ENDPOINT
+# =========================
+
+@router.post("/ask")
+async def ask_copilot(
+    request: CopilotQuestionRequest,
+    _: None = Depends(verify_internal_request),
+):
+    try:
+        answer = await asyncio.wait_for(
+            get_copilot().answer_question(
+                question=request.question,
+                context=request.context,
+            ),
+            timeout=10,
+        )
+
+        return {
+            "success": True,
+            "data": {
+                "answer": answer,
+            },
+        }
+
+    except asyncio.TimeoutError:
+        logger.warning("Copilot timeout | question=%s", request.question)
+        return {
+            "success": False,
+            "data": {"answer": "Response taking too long. Try again."},
+        }
+
+    except Exception as e:
+        logger.exception("Copilot ask failed | question=%s | error=%s", request.question, e)
+        return {
+            "success": False,
+            "data": {"answer": "Unable to answer right now. Try again later."},
+        }
+
+
+# =========================
+# PUBLIC ENDPOINTS
+# =========================
 
 @public_router.get("/api/stress")
 async def get_stress():
@@ -176,19 +236,11 @@ async def get_stress():
     return {
         "score": signal.get("score", 50),
         "status": signal.get("status", "UNKNOWN"),
-        "crowd_yes_price": signal.get("crowd_yes_price"),
-        "crowd_no_price": signal.get("crowd_no_price"),
-        "spread": signal.get("spread"),
-        "imbalance": signal.get("imbalance"),
         "market_title": signal.get("market_title"),
         "market_id": signal.get("market_id"),
-        "outcome": signal.get("outcome"),
         "mid_price": signal.get("mid_price"),
-        "best_bid": signal.get("best_bid"),
-        "best_ask": signal.get("best_ask"),
-        "last_price": signal.get("last_price"),
+        "spread": signal.get("spread"),
         "volume24h": signal.get("volume24h"),
-        "trade_count_24h": signal.get("trade_count_24h"),
         "updated_at": signal.get("updated_at"),
         "source": "Bayse Prediction Markets",
     }
@@ -202,11 +254,6 @@ async def get_markets():
 
         markets = []
         for event in events[:25]:
-            event_title = _safe_event_title(event)
-            category = event.get("category")
-            liquidity = event.get("liquidity")
-            created_at = event.get("createdAt") or event.get("created_at")
-
             for market in event.get("markets", []):
                 market_id = _safe_market_id(market)
                 if not market_id:
@@ -214,13 +261,9 @@ async def get_markets():
 
                 markets.append(
                     {
-                        "event_title": event_title,
-                        "event_category": category,
-                        "event_created_at": created_at,
-                        "event_liquidity": liquidity,
+                        "event_title": _safe_event_title(event),
                         "market_id": market_id,
                         "market_title": market.get("title") or market.get("name") or "Unknown",
-                        "fee_percentage": market.get("feePercentage"),
                     }
                 )
 
