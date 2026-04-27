@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # ─── Firebase ─────────────────────────────────────────────────────────────
     firebase_project_id: str = "zelta-77e9c"
     firebase_service_account_path: str = "./serviceAccountKey.json"
+    firebase_api_key: str = ""
 
     # ─── Google Cloud / Vertex AI ─────────────────────────────────────────────
     google_cloud_project: str = "zelta"
