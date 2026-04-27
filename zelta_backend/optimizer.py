@@ -1,6 +1,22 @@
+"""
+ZELTA Optimizer — AI Brain HTTP Client
+
+This module is the single point of contact between the ZELTA backend
+and the deployed ZELTA AI Brain.
+
+It:
+  - Calls POST /brain/intelligence
+  - Sends wallet_data, transactions, user_context
+  - Returns a normalized brain dict
+  - Provides Bayse and stress helper fetchers
+  - Never owns intelligence logic itself
+
+The Brain service owns all model logic.
+"""
+
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -28,6 +44,31 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_bool(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+def _safe_str(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    return str(value)
+
+
 def _safe_dict(value: Any) -> dict:
     return value if isinstance(value, dict) else {}
 
@@ -36,32 +77,87 @@ def _safe_list(value: Any) -> list:
     return value if isinstance(value, list) else []
 
 
-def _extract_payload(data: Any) -> dict:
+def _extract_body(data: Any) -> dict:
+    """
+    Handles these shapes:
+      1) {"success": true, "data": {...}}
+      2) {"data": {...}}
+      3) {...}
+    """
     if isinstance(data, dict):
-        if isinstance(data.get("data"), dict):
-            return data["data"]
+        inner = data.get("data")
+        if isinstance(inner, dict):
+            return inner
         return data
     return {}
 
+
+def _brain_payload(
+    wallet_data: Optional[dict],
+    transactions: Optional[List[dict]],
+    user_context: Optional[dict],
+) -> dict:
+    wallet_data = wallet_data or {}
+    transactions = transactions or []
+    user_context = user_context or {}
+
+    return {
+        "wallet_data": {
+            "free_cash": _safe_float(wallet_data.get("free_cash", 0.0)),
+            "locked_total": _safe_float(
+                wallet_data.get("locked_total", wallet_data.get("locked_amount", 0.0))
+            ),
+            "total_balance": _safe_float(wallet_data.get("total_balance", 0.0)),
+        },
+        "transactions": _safe_list(transactions),
+        "user_context": _safe_dict(user_context),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN BRAIN CALL
+# ─────────────────────────────────────────────────────────────────────────────
 
 async def run_brain(
     wallet_data: Optional[dict] = None,
     profile_data: Optional[dict] = None,
     transaction_patterns: Optional[dict] = None,
 ) -> dict:
+    """
+    Call the deployed ZELTA AI Brain and return a normalized dict.
+
+    This client matches the Brain pipeline contract:
+      POST /brain/intelligence
+      x-api-key header
+      body: wallet_data, transactions, user_context
+
+    `transaction_patterns` may be either:
+      - {"transactions": [...]}
+      - a raw transaction list
+      - a derived dict of signals to include in user_context
+    """
     wallet_data = wallet_data or {}
     profile_data = profile_data or {}
     transaction_patterns = transaction_patterns or {}
 
-    payload = {
-        "wallet_data": {
-            "free_cash": _safe_float(wallet_data.get("free_cash", 0.0)),
-            "locked_total": _safe_float(wallet_data.get("locked_total", wallet_data.get("locked_amount", 0.0))),
-            "total_balance": _safe_float(wallet_data.get("total_balance", 0.0)),
-        },
-        "transactions": _safe_list(transaction_patterns.get("transactions")),
-        "user_context": _safe_dict(profile_data),
-    }
+    free_cash = _safe_float(wallet_data.get("free_cash", 0.0))
+
+    transactions: List[dict] = []
+    user_context: dict = _safe_dict(profile_data)
+
+    if isinstance(transaction_patterns, dict):
+        if "transactions" in transaction_patterns:
+            transactions = _safe_list(transaction_patterns.get("transactions"))
+        else:
+            # Keep derived pattern signals available to the Brain
+            user_context = {
+                **user_context,
+                **transaction_patterns,
+            }
+    elif isinstance(transaction_patterns, list):
+        transactions = transaction_patterns
+
+    payload = _brain_payload(wallet_data, transactions, user_context)
 
     try:
         async with httpx.AsyncClient(timeout=BRAIN_TIMEOUT) as client:
@@ -73,7 +169,7 @@ async def run_brain(
 
         logger.info("Brain status=%s body=%s", resp.status_code, resp.text)
 
-        if resp.status_code in (401, 403, 422, 404):
+        if resp.status_code in (401, 403, 404, 422):
             raise RuntimeError(f"Brain rejected request: {resp.status_code} {resp.text}")
 
         resp.raise_for_status()
@@ -82,131 +178,363 @@ async def run_brain(
             data = resp.json()
         except json.JSONDecodeError:
             logger.error("Brain returned non-JSON response: %s", resp.text)
-            return _fallback_brain_response(payload["wallet_data"]["free_cash"])
+            return normalise_brain_response(_fallback_brain_response(free_cash))
 
         if isinstance(data, str):
-            logger.error("Brain returned string response: %s", data)
-            return _fallback_brain_response(payload["wallet_data"]["free_cash"])
+            logger.error("Brain returned a string response: %s", data)
+            return normalise_brain_response(_fallback_brain_response(free_cash))
 
-        return normalise_brain_response(data.get("data", data))
+        if isinstance(data, dict) and data.get("success") is False:
+            logger.error("Brain returned success=false: %s", data)
+            return normalise_brain_response(_fallback_brain_response(free_cash))
+
+        body = _extract_body(data)
+        return normalise_brain_response(body)
 
     except Exception as e:
         logger.error("Brain call failed: %s", e)
-        return normalise_brain_response(_fallback_brain_response(payload["wallet_data"]["free_cash"]))
+        return normalise_brain_response(_fallback_brain_response(free_cash))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONVENIENCE WRAPPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def fetch_bayse_signal() -> dict:
+    """
+    Fetch Bayse signal from the Brain service.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{settings.ai_brain_url}/bayse",
+                headers=_brain_headers(),
+            )
+
+        if resp.status_code in (401, 403, 404):
+            logger.error("Bayse auth/routing failed %s: %s", resp.status_code, resp.text)
+            return _fallback_bayse()
+
+        resp.raise_for_status()
+        data = resp.json()
+        raw = data.get("data", {}).get("bayse", data.get("bayse", {}))
+        return _normalise_bayse(raw)
+
+    except Exception as e:
+        logger.warning("Bayse-only fetch failed: %s", e)
+        return _fallback_bayse()
+
+
+async def fetch_stress_signal() -> dict:
+    """
+    Fetch stress index from the Brain service.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{settings.ai_brain_url}/stress",
+                headers=_brain_headers(),
+            )
+
+        if resp.status_code in (401, 403, 404):
+            logger.error("Stress auth/routing failed %s: %s", resp.status_code, resp.text)
+            return _fallback_stress()
+
+        resp.raise_for_status()
+        data = resp.json()
+        raw = data.get("data", {}).get("stress", data.get("stress", {}))
+        return _normalise_stress(raw)
+
+    except Exception as e:
+        logger.warning("Stress-only fetch failed: %s", e)
+        return _fallback_stress()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NORMALIZERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _normalise_bayse(raw: dict) -> dict:
+    raw = raw or {}
+    score = _safe_float(raw.get("score", 50.0))
+    mid_price = _safe_float(raw.get("mid_price", 0.5))
+
+    return {
+        "score": score,
+        "status": _safe_str(raw.get("status", "MODERATE"), "MODERATE"),
+        "market_title": _safe_str(raw.get("market_title", ""), ""),
+        "market_id": _safe_str(raw.get("market_id", ""), ""),
+        "crowd_yes_price": _safe_float(raw.get("crowd_yes_price", 0.5)),
+        "crowd_no_price": _safe_float(raw.get("crowd_no_price", 0.5)),
+        "mid_price": mid_price,
+        "best_bid": _safe_float(raw.get("best_bid", 0.0)),
+        "best_ask": _safe_float(raw.get("best_ask", 0.0)),
+        "spread": _safe_float(raw.get("spread", 0.0)),
+        "imbalance": _safe_float(raw.get("imbalance", 0.0)),
+        "volume24h": _safe_float(raw.get("volume24h", 0.0)),
+        "trade_count_24h": _safe_int(raw.get("trade_count_24h", 0)),
+        "available": _safe_bool(raw.get("available", True)),
+        "raw_crowd_stress": score,
+        "naira_weakness_probability": round(mid_price * 100, 2),
+        "cbn_rate_fear_index": score,
+        "inflation_anxiety_score": score,
+        "usd_ngn_threshold_probability": round(mid_price * 100, 2),
+    }
+
+
+def _normalise_stress(raw: dict) -> dict:
+    raw = raw or {}
+    score = _safe_float(raw.get("score", raw.get("stress_score", 50.0)))
+    components = _safe_dict(raw.get("components"))
+
+    return {
+        "combined_index": score,
+        "level": _safe_str(raw.get("level", "MODERATE"), "MODERATE"),
+        "label": _safe_str(raw.get("plain_english", raw.get("label", "")), ""),
+        "bayse_primary": _safe_float(components.get("bayse_stress", 0.0)),
+        "nlp_secondary": _safe_float(components.get("nlp_stress", 0.0)),
+        "bayse_weight": _safe_float(components.get("bayse_weight", 0.6), 0.6),
+        "nlp_weight": _safe_float(components.get("nlp_weight", 0.4), 0.4),
+        "market_probability": _safe_float(components.get("market_probability", 0.5), 0.5),
+    }
+
+
+def _normalise_bias(raw: dict) -> dict:
+    raw = raw or {}
+    return {
+        "active_bias": _safe_str(raw.get("active_bias", raw.get("bias", "Rational")), "Rational"),
+        "confidence": _safe_str(raw.get("confidence", "Low"), "Low"),
+        "explanation": _safe_str(raw.get("explanation", ""), ""),
+        "inputs": _safe_dict(raw.get("inputs")),
+    }
+
+
+def _normalise_decision(raw: dict) -> dict:
+    raw = raw or {}
+    return {
+        "verdict": _safe_str(raw.get("verdict", "HOLD"), "HOLD"),
+        "market_probability": _safe_float(raw.get("market_probability", 0.5)),
+        "rational_probability": _safe_float(raw.get("rational_probability", 0.5)),
+        "edge": _safe_float(raw.get("edge", 0.0)),
+        "confidence": _safe_str(raw.get("confidence", "Low"), "Low"),
+        "win_probability": _safe_float(raw.get("win_probability", 0.5)),
+        "bias_applied": _safe_str(raw.get("bias_applied", "Rational"), "Rational"),
+        "plain_english": _safe_str(raw.get("plain_english", ""), ""),
+    }
+
+
+def _normalise_confidence(raw: dict) -> dict:
+    raw = raw or {}
+    return {
+        "rational_pct": _safe_float(raw.get("rational_pct", 50.0)),
+        "behavioral_pct": _safe_float(raw.get("behavioral_pct", 50.0)),
+        "gap": _safe_float(raw.get("gap", 0.0)),
+        "confidence_score": _safe_float(raw.get("confidence_score_100", raw.get("confidence_score", 50.0))),
+        "confidence_tier": _safe_str(raw.get("confidence_tier", raw.get("confidence_label", "Low")), "Low"),
+        "score_label": _safe_str(raw.get("score_label", "WEAK"), "WEAK"),
+        "intervention_urgency": _safe_str(raw.get("intervention_urgency", "MODERATE"), "MODERATE"),
+        "is_actionable": _safe_bool(raw.get("is_actionable", False)),
+        "plain_english": _safe_str(raw.get("plain_english", ""), ""),
+        "metrics": _safe_dict(raw.get("metrics")),
+    }
+
+
+def _normalise_allocation(raw: dict) -> dict:
+    raw = raw or {}
+    return {
+        "verdict": _safe_str(raw.get("verdict", "HOLD"), "HOLD"),
+        "invest_amount": _safe_float(raw.get("invest_ngn", raw.get("invest_amount", 0.0))),
+        "save_amount": _safe_float(raw.get("save_ngn", raw.get("save_amount", 0.0))),
+        "hold_amount": _safe_float(raw.get("hold_ngn", raw.get("hold_amount", 0.0))),
+        "allocation_pct": _safe_float(raw.get("allocation_pct", 0.0)),
+        "allocator_notes": _safe_str(raw.get("allocator_notes", ""), ""),
+        "plain_english": _safe_str(raw.get("plain_english", ""), ""),
+    }
+
+
+def _normalise_score(raw: dict) -> dict:
+    raw = raw or {}
+    return {
+        "score": _safe_float(raw.get("score", raw.get("decision_score", 1.0)), 1.0),
+        "decision_score": _safe_float(raw.get("decision_score", raw.get("score", 1.0)), 1.0),
+        "rating": _safe_str(raw.get("rating", "Poor"), "Poor"),
+        "components": _safe_dict(raw.get("components")),
+    }
 
 
 def normalise_brain_response(raw_data: dict) -> dict:
+    """
+    Normalise the full brain response dict into ZELTA's internal structure.
+    All backend services consume this shape.
+    """
     raw_data = raw_data or {}
 
-    # If the Brain returns already-normalized nested data, keep it.
-    if any(k in raw_data for k in ("bayse", "stress", "bias", "decision", "confidence", "allocation", "score", "explanation")):
+    # If the Brain returns the flat intelligence report, convert it.
+    if any(
+        k in raw_data
+        for k in (
+            "stress_index",
+            "stress_level",
+            "bayse_score",
+            "bayse_market",
+            "decision_verdict",
+            "confidence_score",
+            "allocation_plain",
+            "score_rating",
+        )
+    ) and not any(
+        k in raw_data
+        for k in ("bayse", "nlp", "stress", "bias", "decision", "confidence", "allocation", "score", "explanation")
+    ):
+        stress_index = _safe_float(raw_data.get("stress_index", 50.0))
+        bayse_score = _safe_float(raw_data.get("bayse_score", 50.0))
+        market_probability = _safe_float(raw_data.get("market_probability", 0.5))
+
         return {
-            "bayse": raw_data.get("bayse", {}),
-            "nlp": raw_data.get("nlp", {}),
-            "stress": raw_data.get("stress", {}),
-            "bias": raw_data.get("bias", {}),
-            "decision": raw_data.get("decision", {}),
-            "confidence": raw_data.get("confidence", {}),
-            "allocation": raw_data.get("allocation", {}),
-            "score": raw_data.get("score", {}),
-            "explanation": raw_data.get("explanation", {}),
+            "bayse": _normalise_bayse(
+                {
+                    "score": bayse_score,
+                    "status": raw_data.get("bayse_status", "MODERATE"),
+                    "market_title": raw_data.get("bayse_market", "Unavailable"),
+                    "crowd_yes_price": raw_data.get("crowd_yes", 0.5),
+                    "crowd_no_price": raw_data.get("crowd_no", 0.5),
+                    "mid_price": raw_data.get("mid_price", 0.5),
+                    "spread": raw_data.get("spread", 0.0),
+                    "available": True,
+                }
+            ),
+            "nlp": {
+                "scored_headlines": raw_data.get("headlines", []),
+                "aggregate_sentiment": _safe_float(raw_data.get("nlp_sentiment", 0.0)),
+            },
+            "stress": _normalise_stress(
+                {
+                    "score": stress_index,
+                    "level": raw_data.get("stress_level", "MODERATE"),
+                    "plain_english": raw_data.get("stress_label", ""),
+                    "components": {
+                        "bayse_stress": raw_data.get("bayse_primary", stress_index),
+                        "nlp_stress": raw_data.get("nlp_secondary", 50.0),
+                        "market_probability": market_probability,
+                    },
+                }
+            ),
+            "bias": _normalise_bias(
+                {
+                    "active_bias": raw_data.get("active_bias", "Rational"),
+                    "confidence": raw_data.get("bias_confidence", "Low"),
+                    "explanation": raw_data.get("bias_explanation", ""),
+                    "inputs": {
+                        "stress_score": stress_index,
+                        "sentiment": _safe_float(raw_data.get("nlp_sentiment", 0.0)),
+                        "market_probability": market_probability,
+                    },
+                }
+            ),
+            "decision": _normalise_decision(
+                {
+                    "verdict": raw_data.get("decision_verdict", "HOLD"),
+                    "market_probability": market_probability,
+                    "rational_probability": market_probability,
+                    "edge": raw_data.get("edge", 0.0),
+                    "confidence": raw_data.get("confidence_tier", "Low"),
+                    "win_probability": raw_data.get("win_probability", 0.5),
+                    "bias_applied": raw_data.get("active_bias", "Rational"),
+                    "plain_english": raw_data.get("decision_plain", ""),
+                }
+            ),
+            "confidence": _normalise_confidence(
+                {
+                    "rational_pct": raw_data.get("rational_pct", 50.0),
+                    "behavioral_pct": raw_data.get("behavioral_pct", 50.0),
+                    "gap": raw_data.get("confidence_gap", 0.0),
+                    "confidence_score": raw_data.get("confidence_score", 50.0),
+                    "confidence_tier": raw_data.get("confidence_tier", "Low"),
+                    "score_label": raw_data.get("score_label", "WEAK"),
+                    "intervention_urgency": raw_data.get("intervention_urgency", "LOW"),
+                    "is_actionable": raw_data.get("is_actionable", False),
+                    "plain_english": raw_data.get("confidence_plain", ""),
+                    "metrics": raw_data.get("metrics", {}),
+                }
+            ),
+            "allocation": _normalise_allocation(
+                {
+                    "verdict": raw_data.get("verdict", "HOLD"),
+                    "invest_amount": raw_data.get("invest_ngn", 0.0),
+                    "save_amount": raw_data.get("save_ngn", 0.0),
+                    "hold_amount": raw_data.get("hold_ngn", 0.0),
+                    "allocation_pct": raw_data.get("allocation_pct", 0.0),
+                    "allocator_notes": raw_data.get("allocator_notes", ""),
+                    "plain_english": raw_data.get("allocation_plain", ""),
+                }
+            ),
+            "score": _normalise_score(
+                {
+                    "score": raw_data.get("decision_score", 1.0),
+                    "decision_score": raw_data.get("decision_score", 1.0),
+                    "rating": raw_data.get("score_rating", "Poor"),
+                    "components": raw_data.get("components", {}),
+                }
+            ),
+            "explanation": {
+                "summary": raw_data.get("summary", ""),
+                "reasoning": raw_data.get("reasoning", ""),
+                "action": raw_data.get("action", ""),
+                "what_this_means_for_you": raw_data.get("what_this_means_for_you", ""),
+                "bias_explanation": raw_data.get("bias_explanation", ""),
+                "confidence_note": raw_data.get("confidence_plain", ""),
+                "bq_alert": raw_data.get("bq_alert", ""),
+                "context_summary": raw_data.get("context_summary", ""),
+            },
         }
 
-    # Otherwise map your flat intelligence response into the nested structure.
-    stress_index = _safe_float(raw_data.get("stress_index", 50.0), 50.0)
-    bayse_score = _safe_float(raw_data.get("bayse_score", 50.0), 50.0)
-    market_probability = _safe_float(raw_data.get("market_probability", 0.5), 0.5)
-
     return {
-        "bayse": {
-            "score": bayse_score,
-            "status": raw_data.get("bayse_status", "MODERATE"),
-            "market_title": raw_data.get("bayse_market", "Unavailable"),
-            "market_id": "",
-            "crowd_yes_price": _safe_float(raw_data.get("crowd_yes", 0.5), 0.5),
-            "crowd_no_price": _safe_float(raw_data.get("crowd_no", 0.5), 0.5),
-            "mid_price": _safe_float(raw_data.get("mid_price", 0.5), 0.5),
-            "best_bid": 0.0,
-            "best_ask": 0.0,
-            "spread": _safe_float(raw_data.get("spread", 0.0), 0.0),
-            "imbalance": 0.0,
-            "volume24h": 0.0,
-            "trade_count_24h": 0,
-            "available": True,
-            "raw_crowd_stress": stress_index,
-            "naira_weakness_probability": _safe_float(raw_data.get("crowd_yes", 0.5), 0.5),
-        },
-        "nlp": {
-            "scored_headlines": raw_data.get("headlines", []),
-            "aggregate_sentiment": _safe_float(raw_data.get("nlp_sentiment", 0.0), 0.0),
-        },
-        "stress": {
-            "combined_index": stress_index,
-            "level": raw_data.get("stress_level", "MODERATE"),
-            "label": raw_data.get("stress_label", ""),
-            "bayse_primary": _safe_float(raw_data.get("bayse_primary", stress_index), stress_index),
-            "nlp_secondary": _safe_float(raw_data.get("nlp_secondary", 50.0), 50.0),
-            "market_probability": market_probability,
-            "bayse_weight": 0.6,
-            "nlp_weight": 0.4,
-        },
-        "bias": {
-            "active_bias": raw_data.get("active_bias", "Rational"),
-            "confidence": raw_data.get("bias_confidence", "Low"),
-            "explanation": raw_data.get("bias_explanation", ""),
-            "inputs": {
-                "stress_score": stress_index,
-                "sentiment": _safe_float(raw_data.get("nlp_sentiment", 0.0), 0.0),
-                "market_probability": market_probability,
-            },
-        },
-        "decision": {
-            "verdict": raw_data.get("decision_verdict", "HOLD"),
-            "market_probability": market_probability,
-            "rational_probability": market_probability,
-            "edge": _safe_float(raw_data.get("edge", 0.0), 0.0),
-            "confidence": raw_data.get("confidence_tier", "Low"),
-            "win_probability": _safe_float(raw_data.get("win_probability", 0.5), 0.5),
-            "bias_applied": raw_data.get("active_bias", "Rational"),
-            "plain_english": raw_data.get("decision_plain", ""),
-        },
-        "confidence": {
-            "rational_pct": _safe_float(raw_data.get("rational_pct", 50.0), 50.0),
-            "behavioral_pct": _safe_float(raw_data.get("behavioral_pct", 50.0), 50.0),
-            "gap": _safe_float(raw_data.get("confidence_gap", 0.0), 0.0),
-            "confidence_score": _safe_float(raw_data.get("confidence_score", 50.0), 50.0),
-            "confidence_tier": raw_data.get("confidence_tier", "Low"),
-            "score_label": raw_data.get("score_label", "WEAK"),
-            "intervention_urgency": raw_data.get("intervention_urgency", "LOW"),
-            "is_actionable": _safe_float(raw_data.get("confidence_score", 50.0), 50.0) >= 60,
-            "plain_english": raw_data.get("confidence_plain", ""),
-            "metrics": {},
-        },
-        "allocation": {
-            "verdict": raw_data.get("verdict", "HOLD"),
-            "invest_ngn": _safe_float(raw_data.get("invest_ngn", 0.0), 0.0),
-            "save_ngn": _safe_float(raw_data.get("save_ngn", 0.0), 0.0),
-            "hold_ngn": _safe_float(raw_data.get("hold_ngn", 0.0), 0.0),
-            "allocation_pct": _safe_float(raw_data.get("allocation_pct", 0.0), 0.0),
-            "allocator_notes": "",
-            "plain_english": raw_data.get("allocation_plain", ""),
-        },
-        "score": {
-            "score": _safe_float(raw_data.get("decision_score", 1.0), 1.0),
-            "decision_score": _safe_float(raw_data.get("decision_score", 1.0), 1.0),
-            "rating": raw_data.get("score_rating", "Poor"),
-            "components": {},
-        },
-        "explanation": {
-            "summary": raw_data.get("summary", ""),
-            "reasoning": raw_data.get("reasoning", ""),
-            "action": raw_data.get("action", ""),
-            "what_this_means_for_you": raw_data.get("what_this_means_for_you", ""),
-            "bias_explanation": raw_data.get("bias_explanation", ""),
-            "confidence_note": raw_data.get("confidence_plain", ""),
-            "bq_alert": raw_data.get("bq_alert", ""),
-            "context_summary": raw_data.get("context_summary", ""),
-        },
+        "bayse": _normalise_bayse(raw_data.get("bayse", {})),
+        "nlp": raw_data.get("nlp", {}),
+        "stress": _normalise_stress(raw_data.get("stress", {})),
+        "bias": _normalise_bias(raw_data.get("bias", {})),
+        "decision": _normalise_decision(raw_data.get("decision", {})),
+        "confidence": _normalise_confidence(raw_data.get("confidence", {})),
+        "allocation": _normalise_allocation(raw_data.get("allocation", {})),
+        "score": _normalise_score(raw_data.get("score", {})),
+        "explanation": _safe_dict(raw_data.get("explanation", {})),
+    }
+
+
+def _fallback_bayse() -> dict:
+    return {
+        "score": 50.0,
+        "status": "MODERATE",
+        "market_title": "Unavailable",
+        "market_id": "",
+        "crowd_yes_price": 0.5,
+        "crowd_no_price": 0.5,
+        "mid_price": 0.5,
+        "best_bid": 0.0,
+        "best_ask": 0.0,
+        "spread": 0.0,
+        "imbalance": 0.0,
+        "volume24h": 0.0,
+        "trade_count_24h": 0,
+        "raw_crowd_stress": 50.0,
+        "naira_weakness_probability": 50.0,
+        "cbn_rate_fear_index": 50.0,
+        "inflation_anxiety_score": 50.0,
+        "usd_ngn_threshold_probability": 50.0,
+        "available": False,
+    }
+
+
+def _fallback_stress() -> dict:
+    return {
+        "combined_index": 50.0,
+        "level": "MODERATE",
+        "label": "Unable to reach AI Brain. Using neutral defaults.",
+        "bayse_primary": 50.0,
+        "nlp_secondary": 50.0,
+        "bayse_weight": 0.6,
+        "nlp_weight": 0.4,
+        "market_probability": 0.5,
     }
 
 
@@ -215,53 +543,55 @@ def _fallback_brain_response(free_cash: float = 0.0) -> dict:
         "bayse": {
             "score": 50.0,
             "status": "MODERATE",
-            "market_title": "Unavailable",
-            "market_id": "",
             "crowd_yes_price": 0.5,
             "crowd_no_price": 0.5,
             "mid_price": 0.5,
-            "best_bid": 0.0,
-            "best_ask": 0.0,
             "spread": 0.0,
             "imbalance": 0.0,
             "volume24h": 0.0,
             "trade_count_24h": 0,
-            "available": False,
-            "raw_crowd_stress": 50.0,
-            "naira_weakness_probability": 50.0,
+            "market_title": "Unavailable",
+            "market_id": "",
         },
         "nlp": {"scored_headlines": [], "aggregate_sentiment": 0.0},
         "stress": {
-            "combined_index": 50.0,
+            "score": 50,
+            "stress_score": 50,
             "level": "MODERATE",
-            "label": "AI Brain temporarily unavailable. Using safe neutral defaults.",
-            "bayse_primary": 50.0,
-            "nlp_secondary": 50.0,
-            "market_probability": 0.5,
-            "bayse_weight": 0.6,
-            "nlp_weight": 0.4,
+            "plain_english": "AI Brain temporarily unavailable. Using safe neutral defaults.",
+            "components": {
+                "bayse_stress": 0.5,
+                "nlp_stress": 0.5,
+                "market_probability": 0.5,
+                "bayse_weight": 0.6,
+                "nlp_weight": 0.4,
+            },
+            "raw": {},
         },
         "bias": {
+            "bias": "Rational",
             "active_bias": "Rational",
             "confidence": "Low",
             "explanation": "AI Brain unavailable. Defaulting to rational baseline.",
             "inputs": {},
         },
         "decision": {
-            "verdict": "HOLD",
             "market_probability": 0.5,
             "rational_probability": 0.5,
             "edge": 0.0,
             "confidence": "Low",
+            "verdict": "HOLD",
+            "plain_english": "AI Brain unavailable. HOLD all positions.",
             "win_probability": 0.5,
             "bias_applied": "Rational",
-            "plain_english": "AI Brain unavailable. HOLD all positions.",
+            "stress_score": 50,
         },
         "confidence": {
-            "rational_pct": 50.0,
-            "behavioral_pct": 50.0,
-            "gap": 0.0,
-            "confidence_score": 50.0,
+            "rational_pct": 50,
+            "behavioral_pct": 50,
+            "gap": 0,
+            "confidence_score_100": 50,
+            "confidence_score": 50,
             "confidence_tier": "Low",
             "score_label": "WEAK",
             "intervention_urgency": "LOW",
@@ -282,16 +612,18 @@ def _fallback_brain_response(free_cash: float = 0.0) -> dict:
             "score": 1.0,
             "decision_score": 1.0,
             "rating": "Poor",
-            "components": {},
+            "components": {
+                "edge_score": 0.0,
+                "confidence_score": 0.0,
+                "verdict_score": 0.5,
+            },
         },
         "explanation": {
             "summary": "AI Brain unavailable.",
-            "reasoning": "",
+            "reasoning": "Could not reach the centralised AI Brain. All positions held.",
             "action": "Hold current positions.",
-            "what_this_means_for_you": "",
-            "bias_explanation": "AI Brain unavailable. Defaulting to rational baseline.",
-            "confidence_note": "Signal unavailable. No action recommended.",
+            "confidence_note": "No signal available.",
             "bq_alert": "AI Brain offline. Using safe fallback.",
-            "context_summary": "MPC Decision: 50% YES | Market moderate | HOLD recommended",
+            "context_summary": "",
         },
     }
