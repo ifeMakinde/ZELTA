@@ -7,7 +7,7 @@ Integrates with Bayse stress signal for real-time confidence adjustments.
 
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 from google.cloud import firestore
@@ -28,14 +28,26 @@ logger = logging.getLogger(__name__)
 MONTE_CARLO_RUNS = 10_000
 
 
-def _parse_datetime(value) -> Optional[datetime]:
+def _parse_datetime(value: Any) -> Optional[datetime]:
     if value is None:
         return None
+
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
     if isinstance(value, str):
         dt = datetime.fromisoformat(value)
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+    iso = getattr(value, "isoformat", None)
+    if callable(iso):
+        try:
+            dt = value
+            if isinstance(dt, datetime):
+                return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            return None
+
     return None
 
 
@@ -48,9 +60,15 @@ async def run_side_hustle_simulation(
     """
     Run Bayesian Monte Carlo projection for a side hustle investment.
     """
-    bayse_signal = await fetch_bayse_signal()
-    bayse_stress = float(bayse_signal.get("raw_crowd_stress", bayse_signal.get("score", 50.0)))
+    _ = (db, uid)  # reserved for future persistence/logging
 
+    try:
+        bayse_signal = await fetch_bayse_signal()
+    except Exception as exc:
+        logger.warning("Bayse signal unavailable for side hustle sim: %s", exc)
+        bayse_signal = {}
+
+    bayse_stress = float(bayse_signal.get("raw_crowd_stress", bayse_signal.get("score", 50.0)))
     stress_uncertainty_multiplier = 1.0 + (bayse_stress / 200.0)
 
     revenue_mean = (request.expected_revenue_min + request.expected_revenue_max) / 2
@@ -130,8 +148,7 @@ async def run_side_hustle_simulation(
         expected_return_mean=round(mean_return + request.investment_amount, 2),
         roi_percentage=roi_pct,
         monte_carlo=monte_carlo,
-        stress_adjusted=current_stress_index >= settings.stress_high_threshold
-        or bayse_stress >= settings.stress_high_threshold,
+        stress_adjusted=current_stress_index >= settings.stress_high_threshold or bayse_stress >= settings.stress_high_threshold,
         verdict=verdict,
         plain_english=plain_english,
         sharpe_score=sharpe_score,
@@ -148,6 +165,8 @@ async def run_savings_simulation(
     Model savings trajectory against upcoming fee obligations.
     Returns week-by-week obligation risk map with green/amber/red status.
     """
+    _ = (db, uid)  # reserved for future persistence/logging
+
     weeks_needed = int(np.ceil(request.target_amount / max(1.0, request.weekly_savings_amount)))
     weeks_needed = max(1, weeks_needed)
 
