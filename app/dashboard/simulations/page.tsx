@@ -13,22 +13,14 @@ function page() {
 
   return (
     <div className="px-3 lg:px-0">
+        {/* HEADER */}
+       <PageHeader
+        title={`Portfolio Simulations`}
+        description="Practice before you commit — Bayesian Monte Carlo projection"
+      ></PageHeader>
 
       {/* HEADER */}
-      <section>
-        <PageHeader
-          title={
-            <span className="font-bold text-gray-800 text-2xl md:text-3xl lg:text-4xl">
-              Portfolio Simulations
-            </span>
-          }
-          description={
-            <span className="font-light text-gray-500 text-sm md:text-base">
-              Practice before you commit — Bayesian Monte Carlo projection
-            </span>
-          }
-        />
-      </section>
+    
 
       {/* STATS */}
       <div className="bg-white/5 border-2 border-gray-100 mt-3 w-full rounded-2xl p-4">
