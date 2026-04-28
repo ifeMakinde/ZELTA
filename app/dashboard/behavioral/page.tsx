@@ -12,20 +12,10 @@ import Zelta from "./components/zelta";
 function page() {
   return (
       <div>
-       <section>
-  <PageHeader
-    title={
-      <span className="font-bold text-gray-800 text-2xl sm:text-3xl lg:text-4xl">
-        Behavioral Snapshot
-      </span>
-    }
-    description={
-      <span className="font-light text-gray-500 text-sm sm:text-base">
-        Deep dive into your behavioral bias patterns
-      </span>
-    }
-  />
-</section>
+       <PageHeader
+        title={`Behavioral Snapshot`}
+        description="Deep dive into your behavioral bias patterns"
+      ></PageHeader>
 
        <Bayse/>
 
