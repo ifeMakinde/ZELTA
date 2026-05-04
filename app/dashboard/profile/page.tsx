@@ -1,0 +1,259 @@
+"use client";
+
+import React, { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import PageHeader from "@/components/PageHeader";
+import { CreditCard, Target, Bell, ShieldCheck, ChevronRight, LogOut } from "lucide-react";
+import { auth } from "@/firebase/index";
+import { useAuthState } from "react-firebase-hooks/auth";
+
+// ─── Helpers ───────────────────────────────────────────────────────
+
+function StatPill({ label, value, valueColor = "text-gray-900" }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div className="rounded-xl bg-gray-50 p-3">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className={`mt-1 text-sm font-bold ${valueColor}`}>{value}</p>
+    </div>
+  );
+}
+
+function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${on ? "bg-[#10b981]" : "bg-gray-200"}`}
+    >
+      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${on ? "translate-x-5" : "translate-x-0"}`} />
+    </button>
+  );
+}
+
+// ─── Main content (needs useSearchParams so wrap in Suspense) ───────
+
+function ProfileContent() {
+  const searchParams = useSearchParams();
+  const [user] = useAuthState(auth);
+  const [section, setSection] = useState(
+    searchParams.get("tab") === "settings" ? "notifications" : "profile"
+  );
+
+  const [capitalRange, setCapitalRange] = useState("₦10,000 - ₦50,000");
+  const [risk, setRisk] = useState("Moderate");
+  const [income, setIncome] = useState("");
+  const [goal, setGoal] = useState("Build Emergency Fund");
+  const [aggression, setAggression] = useState(50);
+  const [stressSens, setStressSens] = useState(60);
+  const [notifs, setNotifs] = useState({ decisionAlerts: true, stressIndex: true, bayse: false, goalProgress: true, behavioral: false });
+
+  const name = user?.displayName || user?.email?.split("@")[0] || "User";
+  const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+  const since = user?.metadata?.creationTime
+    ? new Date(user.metadata.creationTime).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : "March 2026";
+
+  const NAV = [
+    { key: "profile", icon: <CreditCard className="h-4 w-4" />, label: "Financial Profile" },
+    { key: "goals",   icon: <Target className="h-4 w-4" />,      label: "Goals" },
+    { key: "notifications", icon: <Bell className="h-4 w-4" />,  label: "Notifications" },
+    { key: "security", icon: <ShieldCheck className="h-4 w-4" />, label: "Security" },
+  ];
+
+  return (
+    <div className="pb-10">
+      <PageHeader title="Profile" description="Manage your account settings" />
+
+      {/* Profile card */}
+      <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 lg:p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#10b981] text-xl font-bold text-white">
+              {initials}
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">{name}</h2>
+              <p className="text-sm text-gray-500">Nigerian Student</p>
+            </div>
+          </div>
+          <button className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
+            Edit
+          </button>
+        </div>
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <StatPill label="Member Since" value={since} />
+          <StatPill label="Decisions Made" value="24 decisions" />
+          <StatPill label="Success Rate" value="89%" valueColor="text-[#10b981]" />
+        </div>
+      </div>
+
+      {/* Nav tabs */}
+      <div className="mt-6 flex flex-wrap gap-2">
+        {NAV.map(({ key, icon, label }) => (
+          <button
+            key={key}
+            onClick={() => setSection(key)}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${section === key ? "bg-[#10b981] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+          >
+            {icon}{label}
+          </button>
+        ))}
+      </div>
+
+      {/* Financial Profile */}
+      {section === "profile" && (
+        <section className="mt-5 space-y-5 rounded-2xl border border-gray-100 bg-white p-5 lg:p-6">
+          <div className="flex items-center gap-2"><CreditCard className="h-5 w-5 text-gray-500" /><h3 className="font-bold text-gray-800">Financial Profile</h3></div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-gray-700">Available Capital Range</p>
+            <div className="flex flex-wrap gap-2">
+              {["₦0 - ₦10,000", "₦10,000 - ₦50,000", "₦50,000+"].map((opt) => (
+                <button key={opt} onClick={() => setCapitalRange(opt)}
+                  className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${capitalRange === opt ? "border-[#10b981] bg-[#10b981] text-white" : "border-gray-200 bg-gray-50 text-gray-700 hover:border-[#10b981]"}`}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-gray-700">Risk Preference</p>
+            <div className="flex gap-2">
+              {["Conservative", "Moderate", "Aggressive"].map((opt) => (
+                <button key={opt} onClick={() => setRisk(opt)}
+                  className={`flex-1 rounded-xl border py-2 text-sm font-medium transition ${risk === opt ? "border-[#10b981] bg-[#10b981] text-white" : "border-gray-200 bg-gray-50 text-gray-700 hover:border-[#10b981]"}`}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-gray-700">Monthly Income (Optional)</p>
+            <input type="number" value={income} onChange={(e) => setIncome(e.target.value)} placeholder="Enter amount"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:border-[#10b981] focus:ring-1 focus:ring-[#10b981]" />
+          </div>
+          <button className="w-full rounded-xl bg-[#10b981] py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b9268]">Save Financial Profile</button>
+        </section>
+      )}
+
+      {/* Goals */}
+      {section === "goals" && (
+        <section className="mt-5 space-y-5 rounded-2xl border border-gray-100 bg-white p-5 lg:p-6">
+          <div className="flex items-center gap-2"><Target className="h-5 w-5 text-gray-500" /><h3 className="font-bold text-gray-800">Goals & Preferences</h3></div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-gray-700">Primary Financial Goal</p>
+            <select value={goal} onChange={(e) => setGoal(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:border-[#10b981]">
+              {["Build Emergency Fund","Build Savings","Generate Income","Grow Wealth","Pay School Fees"].map((g) => <option key={g}>{g}</option>)}
+            </select>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-700">Decision Aggressiveness</p>
+              <span className="text-xs font-medium text-[#10b981]">{aggression}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="shrink-0 text-xs text-gray-400">Conservative</span>
+              <input type="range" min={0} max={100} step={1} value={aggression} onChange={(e) => setAggression(Number(e.target.value))} className="flex-1 accent-[#10b981]" />
+              <span className="shrink-0 text-xs text-gray-400">Aggressive</span>
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-700">Stress Sensitivity</p>
+              <span className="text-xs font-medium text-[#10b981]">{stressSens}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="shrink-0 text-xs text-gray-400">Low</span>
+              <input type="range" min={0} max={100} step={1} value={stressSens} onChange={(e) => setStressSens(Number(e.target.value))} className="flex-1 accent-[#10b981]" />
+              <span className="shrink-0 text-xs text-gray-400">High</span>
+            </div>
+          </div>
+          <button className="w-full rounded-xl bg-[#10b981] py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b9268]">Save Preferences</button>
+        </section>
+      )}
+
+      {/* Notifications */}
+      {section === "notifications" && (
+        <section className="mt-5 rounded-2xl border border-gray-100 bg-white p-5 lg:p-6">
+          <div className="mb-4 flex items-center gap-2"><Bell className="h-5 w-5 text-gray-500" /><h3 className="font-bold text-gray-800">Notifications</h3></div>
+          <div className="divide-y divide-gray-100">
+            {([
+              { key: "decisionAlerts" as const,  label: "Decision Alerts",       desc: "Get notified when ZELTA recommends an action" },
+              { key: "stressIndex" as const,      label: "Stress Index Updates",  desc: "Daily summary of your stress levels" },
+              { key: "bayse" as const,            label: "Bayse Market Signals",  desc: "Important market intelligence updates" },
+              { key: "goalProgress" as const,     label: "Goal Progress",         desc: "Weekly updates on your savings goals" },
+              { key: "behavioral" as const,       label: "Behavioral Insights",   desc: "Monthly behavioral pattern analysis" },
+            ]).map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between py-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{label}</p>
+                  <p className="text-xs text-gray-500">{desc}</p>
+                </div>
+                <Toggle on={notifs[key]} onToggle={() => setNotifs((p) => ({ ...p, [key]: !p[key] }))} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Security */}
+      {section === "security" && (
+        <section className="mt-5 space-y-3">
+          {/* Security & Privacy */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 lg:p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-gray-500" />
+              <h3 className="font-bold text-gray-800">Security & Privacy</h3>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {["Change Password","Two-Factor Authentication","Connected Accounts","Privacy Settings","Data Export"].map((item) => (
+                <button key={item} className="flex w-full items-center justify-between py-3.5 text-sm font-medium text-gray-800 transition hover:text-[#10b981]">
+                  {item}<ChevronRight className="h-4 w-4 text-gray-400" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Help, About, Legal */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 lg:p-6">
+            <div className="divide-y divide-gray-100">
+              {["Help & Support","About ZELTA","Terms & Conditions","Privacy Policy"].map((item) => (
+                <button key={item} className="flex w-full items-center justify-between py-3.5 text-sm font-medium text-gray-800 transition hover:text-[#10b981]">
+                  {item}<ChevronRight className="h-4 w-4 text-gray-400" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sign Out */}
+          <button
+            onClick={() => {
+              import("firebase/auth").then(({ signOut }) => {
+                import("@/firebase/index").then(({ auth }) => signOut(auth));
+              });
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-300 bg-white py-4 text-sm font-semibold text-red-500 transition hover:bg-red-50"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </button>
+
+          {/* Footer */}
+          <div className="pb-4 pt-2 text-center">
+            <p className="text-sm font-medium text-gray-500">ZELTA v1.0.0</p>
+            <p className="mt-0.5 text-xs text-gray-400">Behavioral Quantitative Financial Intelligence</p>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ─── Default export — must be a named function component ────────────
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-400">Loading profile...</div>}>
+      <ProfileContent />
+    </Suspense>
+  );
+}
