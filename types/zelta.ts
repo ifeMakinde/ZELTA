@@ -233,3 +233,152 @@ export interface BayseSignalsData {
   stress: BayseStressData;
   sentiment: BayseSentimentData;
 }
+
+// ─── /api/behavioral/snapshot ───────────────────────────────────
+
+export interface InstinctSay {
+  action: string;
+  amount: number;
+}
+
+export interface MathSay {
+  action: string;
+  amount: number;
+}
+
+export interface BehavioralEvidence {
+  transaction: string;
+  date: string;
+  trigger: string;
+  bayse_fear_at_time: number;
+  zelta_model_at_time: number;
+  gap: number;
+  plain_english: string;
+}
+
+export interface BehavioralBiasCard {
+  bias: string;
+  status: string;
+  current_strength: number;
+  explanation: string;
+}
+
+export interface BehavioralSnapshot {
+  active_bias: string;
+  confidence: string;
+  explanation: string;
+  bayse_crowd_fear: number;
+  bayse_zelta_model: number;
+  bayse_gap: number;
+  bayse_market_title?: string;
+  rational_pct: number;
+  behavioral_pct: number;
+  decision_gap: number;
+  confidence_score?: number;
+  confidence_tier?: string;
+  intervention_urgency?: string;
+  decision_plain_english?: string;
+  bias_strength_label?: string;
+  bias_strength_value?: number;
+  evidence?: BehavioralEvidence[];
+  tracked_biases?: BehavioralBiasCard[];
+  instinct_says: InstinctSay;
+  math_says: MathSay;
+  correction_value: number;
+  correction_plain: string;
+  recommendation?: string;
+}
+
+// ─── /api/behavioral/pattern ────────────────────────────────────
+
+export interface BehavioralWeekItem {
+  week: string;
+  bias: string;
+  strength: number;
+  note?: string;
+  confidence_label?: string;
+}
+
+export interface BehavioralPattern {
+  weeks?: BehavioralWeekItem[];
+  dominant_bias?: string;
+  summary?: string;
+  recommendation?: string;
+  confidence_gap?: number;
+}
+
+export interface CopilotMessage {
+  role: "system" | "user" | "assistant" | string;
+  content: string;
+  timestamp?: string | null;
+}
+
+export interface ContextPill {
+  label: string;
+  value: string;
+}
+
+export interface CopilotRequest {
+  question: string;
+  context?: Record<string, unknown> | null;
+  conversation_history?: CopilotMessage[];
+}
+
+export interface CopilotResponse {
+  answer: string;
+  verdict?: string;
+  verdict_amount?: number;
+  context_pills?: ContextPill[];
+  confidence?: number;
+  sources?: string[];
+}
+
+// ─── /api/simulation/* ───────────────────────────────────────────
+
+export type SimulationType = "side_hustle" | "savings";
+
+export interface SideHustleSimRequest {
+  investment_amount: number;
+  hustle_type: string;
+  expected_revenue_min: number;
+  expected_revenue_max: number;
+  time_horizon_weeks: number;
+  fixed_costs?: number;
+}
+
+export interface SavingsSimRequest {
+  weekly_savings_amount: number;
+  target_amount: number;
+  upcoming_obligations: Array<{
+    amount: number;
+    due_date: string;
+    description?: string;
+  }>;
+}
+
+export interface SimulationResponse {
+  success: boolean;
+  simulation_type: SimulationType;
+  data: {
+    // Common fields
+    recommendation?: string;
+    confidence_score?: number;
+    risk_level?: string;
+    // Side hustle specific
+    kelly_allocation?: number;
+    expected_return?: number;
+    probability_bands?: {
+      low: number;
+      medium: number;
+      high: number;
+    };
+    // Savings specific
+    weeks_to_target?: number;
+    weekly_trajectory?: Array<{
+      week: number;
+      saved_amount: number;
+      risk_status: "green" | "amber" | "red";
+      notes?: string;
+    }>;
+  };
+}

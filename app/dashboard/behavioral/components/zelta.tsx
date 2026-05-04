@@ -1,42 +1,54 @@
+"use client";
+
 import { Brain, MessageSquare } from "lucide-react";
-export default function Zelta(){
-    return(
-        <div>
-            <div className="w-full lg:w-[98%] h-auto lg:h-50 mt-3 lg:ml-5 border-green-400/30 border bg-green-50 rounded-2xl pb-6 lg:pb-0">
-  {/* Header */}
-  <div className="ml-5 lg:ml-7 mt-5 flex justify-start gap-2">
-    <Brain className="w-3 h-3 text-green-400 mt-2 shrink-0" />
-    <h2 className="font-bold text-gray-800 text-lg">ZELTA Recommendation</h2>
-  </div>
+import {
+  useBehavioralDataContext,
+} from "@/context/BehavioralSnapshotContext";
+import { DEFAULT_BEHAVIORAL_SNAPSHOT } from "@/hooks/zelta";
+import { LoadingState } from "@/components/ui/State";
 
-  {/* Description */}
-  <p className="text-gray-500 ml-5 lg:ml-12 mt-2 text-md pr-4 lg:pr-0">
-    Your loss aversion is being triggered by Bayse crowd fear spikes that don't match actual risk. 
-    When you see Bayse signals above 70%,<br className="hidden lg:block" />
-    wait 24 hours before making cash withdrawal decisions. The crowd panic typically corrects within 48 hours.
-  </p>
-  {/* Tags - Wraps on mobile, stays exact % on lg */}
-  <div className="flex flex-wrap lg:flex-row gap-2 mt-4 lg:mt-3 ml-5 lg:ml-12 pr-4 lg:pr-0">
-    <div className="w-auto lg:w-[17.5%] h-6 px-3 lg:px-0 rounded-full bg-green-100 font-bold text-green-400 text-sm flex items-center">
-      <span className="lg:ml-2 whitespace-nowrap">Bayse-Aware Decisions</span>
-    </div>
-    
-    <div className="w-auto lg:w-[11%] h-6 px-3 lg:px-0 bg-green-100 rounded-full font-bold text-green-400 text-sm flex items-center">
-      <span className="lg:ml-2 whitespace-nowrap">24-Hour Rule</span>
-    </div>
-    
-    <div className="w-auto lg:w-[21%] h-6 px-3 lg:px-0 bg-green-100 rounded-full text-green-400 font-bold text-sm flex items-center">
-      <span className="lg:ml-2 whitespace-nowrap">Loss Aversion Management</span>
-    </div>
-  </div>
+export default function Zelta() {
+  const { snapshot, loading } = useBehavioralDataContext();
+  const data = snapshot ?? DEFAULT_BEHAVIORAL_SNAPSHOT;
 
-  {/* Floating Button */}
-  <button className="fixed bottom-10 right-5 lg:right-10 bg-emerald-500 rounded-full w-12 h-12 lg:w-15 lg:h-15 z-50 flex items-center justify-center shadow-lg">
-    <MessageSquare className="text-white w-4 h-4 lg:w-5 lg:h-5" />
-  </button>
-</div>
-            
-                   </div>
-                   
-    )
+  if (loading) return <LoadingState text="Loading ZELTA recommendation..." />;
+
+  const showBiasTag =
+    !!data.active_bias && data.active_bias.toLowerCase() !== "none";
+
+  return (
+    <div className="relative mt-3 rounded-2xl border border-green-400/30 bg-green-50 p-5 lg:ml-5">
+      <div className="ml-0 flex items-center gap-2 lg:ml-2">
+        <Brain className="mt-1 h-4 w-4 text-green-400" />
+        <h2 className="text-lg font-bold text-gray-800">
+          ZELTA Recommendation
+        </h2>
+      </div>
+
+      <p className="mt-2 pr-4 text-sm text-gray-500 lg:ml-7">
+        {data.recommendation ||
+          "Your behavioral patterns are being monitored. ZELTA will provide personalized recommendations based on your decision-making trends."}
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2 lg:ml-7">
+        <div className="flex h-6 w-auto items-center rounded-full bg-green-100 px-3 text-sm font-bold text-green-400">
+          Bayse-Aware Decisions
+        </div>
+
+        <div className="flex h-6 w-auto items-center rounded-full bg-green-100 px-3 text-sm font-bold text-green-400">
+          24-Hour Rule
+        </div>
+
+        {showBiasTag && (
+          <div className="flex h-6 w-auto items-center rounded-full bg-green-100 px-3 text-sm font-bold text-green-400">
+            {data.active_bias} Management
+          </div>
+        )}
+      </div>
+
+      <button className="fixed bottom-10 right-5 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 shadow-lg lg:right-10 lg:h-14 lg:w-14">
+        <MessageSquare className="h-4 w-4 text-white lg:h-5 lg:w-5" />
+      </button>
+    </div>
+  );
 }

@@ -1,105 +1,98 @@
+"use client";
+
 import { MessageSquareQuote } from "lucide-react";
+import { useBehavioralDataContext } from "@/context/BehavioralSnapshotContext";
+import { DEFAULT_BEHAVIORAL_SNAPSHOT } from "@/hooks/zelta";
+import { LoadingState } from "@/components/ui/State";
+
 export default function Active() {
+  const { snapshot, loading } = useBehavioralDataContext();
+  const data = snapshot ?? DEFAULT_BEHAVIORAL_SNAPSHOT;
+
+  if (loading) return <LoadingState text="Loading active bias..." />;
+
+  const evidence = Array.isArray(data.evidence) ? data.evidence : [];
+
+  const hasActiveBias =
+    data.active_bias && data.active_bias.toLowerCase() !== "none";
+
   return (
-    <div>
-      <div className="p-2 lg:p-0">
-        <section className="w-full mt-5 h-auto lg:h-143 bg-white shadow-sm rounded-2xl pb-6 lg:pb-0">
-          {/* Header Section */}
-          <div className="flex justify-start ml-4 lg:ml-7 mt-7 gap-3">
-            <div className="bg-orange-200 w-10 h-10 rounded-2xl shrink-0">
-              <MessageSquareQuote className="relative w-5 h-5 text-orange-400 left-2.5 top-2" />
-            </div>
-            <div>
-              <h2 className="text-gray-800 font-bold text-lg">
-                Active Bias Detected
-              </h2>
-              <p className="text-sm text-gray-500">
-                Based on Biase signals + wallet patterns
-              </p>
-            </div>
+    <div className="p-2 lg:p-0">
+      <section className="mt-5 rounded-2xl bg-white pb-6 shadow-sm lg:pb-0">
+        <div className="flex gap-3 px-4 pt-7 lg:px-7">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-200">
+            <MessageSquareQuote className="h-5 w-5 text-orange-400" />
           </div>
-
-          {/* Main Card */}
-          <div className="w-[94%] mx-auto lg:mx-0 h-auto lg:h-85 bg-white rounded-2xl mt-5 lg:ml-7 pb-6 lg:pb-0">
-            <h1 className="text-3xl lg:text-4xl text-orange-400 ml-5 relative top-5 font-bold uppercase">
-              Loss Aversion
-            </h1>
-            <p className="text-gray-500 text-md mt-10 lg:mt-7 ml-5 pr-4 lg:pr-0">
-              You withdrew ₦10,000 cash last Tuesday during a stress spike. That
-              cash is sitting idle. Bayse crowd fear was 74% that day — our
-              <br className="hidden lg:block" />
-              model said 54%.{" "}
-              <span className="font-bold text-gray-800">
-                The crowd was wrong
-              </span>
-              . Your hoarding was driven by market panic, not real risk.
-            </p>
-
-            {/* Progress Label */}
-            <div className="flex justify-between lg:justify-start ml-5 mt-6 lg:mt-3 lg:gap-40 pr-5 lg:pr-0">
-              <p className="text-gray-500">Bias Strength</p>
-              <p className="text-orange-400 font-bold text-sm lg:ml-145">
-                HIGH
-              </p>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-[90%] lg:w-[94%] h-3 mx-auto lg:ml-5 bg-green-100 rounded-full mt-2">
-              <div className="w-[70%] h-3 bg-[#10b981] rounded-full"></div>
-            </div>
-
-            {/* Transaction Evidence Box */}
-            <div className="w-[92%] lg:w-[95%] h-auto lg:h-35 bg-orange-200/20 border-orange-400/30 border mt-5 lg:mt-3 mx-auto lg:ml-5 rounded-2xl pb-4 lg:pb-0">
-              <h2 className="text-gray-800 font-bold text-sm ml-5 mt-5">
-                Evidence from Transactions
-              </h2>
-
-              <div className="space-y-2 mt-2">
-                <div className="flex justify-start gap-2 ml-5">
-                  <div className="border-orange-300 rounded-full border-2 text-orange-300 w-5 h-5 flex items-center justify-center shrink-0">
-                    <span className="text-sm leading-none mb-1">x</span>
-                  </div>
-                  <p className="text-gray-500 text-sm">
-                    Tuesday: Withdrew ₦10,000 cash during Bayse fear spike (74%)
-                  </p>
-                </div>
-                <div className="flex justify-start gap-2 ml-5">
-                  <div className="border-orange-300 border-2 rounded-full text-orange-300 w-5 h-5 flex items-center justify-center shrink-0">
-                    <span className="text-sm leading-none mb-1">x</span>
-                  </div>
-                  <p className="text-gray-500 text-sm">
-                    Stress-spending detected: ₦2,400 above normal on
-                    food/transport
-                  </p>
-                </div>
-                <div className="flex justify-start gap-2 ml-5">
-                  <div className="border-orange-300 border-2 rounded-full text-orange-300 w-5 h-5 flex items-center justify-center shrink-0">
-                    <span className="text-sm leading-none mb-1">x</span>
-                  </div>
-                  <p className="text-gray-500 text-sm">
-                    Hoarding cash under mattress instead of productive
-                    allocation
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Correction Box */}
-          <div className="bg-white w-[94%] mx-auto lg:mx-0 lg:ml-7 mt-5 h-auto lg:h-25 rounded-2xl p-5 lg:p-0">
-            <h1 className="text-gray-800 font-bold lg:relative lg:top-2 lg:ml-5">
-              ZELTA Correction Applied:
-            </h1>
-            <p className="text-gray-500 text-sm mt-3 lg:ml-5">
-              You're 2.8× more sensitive to losses than gains right now. ZELTA
-              will cap your side hustle reinvestment at 25% of free cash when
-              stress is HIGH (60+)
-              <br className="hidden lg:block" />
-              and recommend protective allocations until Bayse signals calm.
+          <div>
+            <h2 className="text-lg font-bold text-gray-800">
+              Active Bias Detected
+            </h2>
+            <p className="text-sm text-gray-500">
+              Based on bias signals + wallet patterns
             </p>
           </div>
-        </section>
-      </div>
+        </div>
+
+        <div className="mx-auto mt-5 w-[94%] rounded-2xl bg-white pb-6 lg:mx-0 lg:ml-7 lg:pb-0">
+          <h1 className="relative top-5 ml-5 text-3xl font-bold uppercase text-orange-400 lg:text-4xl">
+            {hasActiveBias ? data.active_bias : "None"}
+          </h1>
+
+          <p className="mt-10 ml-5 pr-4 text-sm text-gray-500 lg:mt-7 lg:pr-0">
+            {data.explanation || "No explanation available"}
+          </p>
+
+          <div className="mt-6 flex justify-between px-5 lg:mt-3 lg:justify-start lg:gap-40 lg:px-0">
+            <p className="text-gray-500">Bias Strength</p>
+            <p className="text-sm font-bold text-orange-400">
+              {data.bias_strength_label || "LOW"}
+            </p>
+          </div>
+
+          <div className="mx-auto mt-2 h-3 w-[90%] overflow-hidden rounded-full bg-green-100 lg:ml-5 lg:w-[94%]">
+            <div
+              className="h-3 rounded-full bg-[#10b981]"
+              style={{
+                width: `${Math.min(Math.max(data.bias_strength_value ?? 0, 0), 100)}%`,
+              }}
+            />
+          </div>
+
+          <div className="mx-auto mt-5 w-[92%] rounded-2xl border border-orange-400/30 bg-orange-200/20 pb-4 lg:ml-5 lg:mt-3 lg:w-[95%] lg:pb-0">
+            <h2 className="ml-5 mt-5 text-sm font-bold text-gray-800">
+              Evidence from Transactions
+            </h2>
+
+            <div className="mt-2 space-y-2">
+              {evidence.length > 0 ? (
+                evidence.map((item, index) => (
+                  <div key={index} className="ml-5 flex gap-2">
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-orange-300 text-orange-300">
+                      <span className="text-sm leading-none">×</span>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      {item.plain_english || "No explanation available"}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="ml-5 text-sm text-gray-500">
+                  No evidence available
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-auto mt-5 w-[94%] rounded-2xl bg-white p-5 lg:mx-0 lg:ml-7 lg:p-0">
+          <h1 className="font-bold text-gray-800 lg:relative lg:top-2 lg:ml-5">
+            ZELTA Correction Applied:
+          </h1>
+          <p className="mt-3 text-sm text-gray-500 lg:ml-5">
+            {data.correction_plain || "No correction available."}
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,105 +1,145 @@
-import { Landmark, Users, Clock, TrendingDown, CheckCircle } from "lucide-react"
-export default function Five(){
-    return(
-        <div>
-            <div className="p-2 lg:p-0">
-  <h2 className="text-2xl font-bold text-gray-800 ml-4 mt-5">
-    Five Behavioral Biases Tracked
-  </h2>
+"use client";
 
-  {/* First Row - Stacks on mobile, side-by-side on lg */}
-  <section className="flex flex-col lg:flex-row mt-3 justify-start lg:ml-5 gap-5">
-    <div className="w-full h-auto lg:h-37 bg-white border border-orange-400/30 rounded-2xl pb-4 lg:pb-0">
-      <div className="flex justify-start mt-5 ml-5 gap-2">
-        <div className="bg-orange-100 w-10 h-10 rounded-full shrink-0">
-          <TrendingDown className="relative w-5 h-5 text-orange-400 left-2.5 top-2" />
+import React from "react";
+import {
+  Landmark,
+  Users,
+  Clock,
+  TrendingDown,
+  CheckCircle,
+} from "lucide-react";
+import {
+  useBehavioralDataContext,
+} from "@/context/BehavioralSnapshotContext";
+import { DEFAULT_BEHAVIORAL_SNAPSHOT } from "@/hooks/zelta";
+import { LoadingState } from "@/components/ui/State";
+
+export default function Five() {
+  const { snapshot, loading } = useBehavioralDataContext();
+  const data = snapshot ?? DEFAULT_BEHAVIORAL_SNAPSHOT;
+
+  if (loading) return <LoadingState text="Loading tracked biases..." />;
+
+  const biases = Array.isArray(data.tracked_biases)
+    ? data.tracked_biases
+    : [];
+
+  const getIcon = (bias: string) => {
+    switch (bias?.toLowerCase()) {
+      case "loss aversion":
+        return TrendingDown;
+      case "present bias":
+        return Clock;
+      case "overconfidence":
+        return CheckCircle;
+      case "herd behavior":
+        return Users;
+      case "mental accounting":
+        return Landmark;
+      default:
+        return TrendingDown;
+    }
+  };
+
+  const getStrengthLabel = (value: number) => {
+    if (value >= 60) return "HIGH";
+    if (value >= 30) return "MODERATE";
+    return "LOW";
+  };
+
+  const visibleBiases = biases.slice(0, 5);
+
+  return (
+    <div className="p-2 lg:p-0">
+      <h2 className="mt-5 ml-4 text-2xl font-bold text-gray-800">
+        Behavioral Biases Tracked
+      </h2>
+
+      {visibleBiases.length === 0 ? (
+        <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-5 lg:ml-5">
+          <p className="text-sm text-gray-500">
+            No tracked biases yet. ZELTA will populate this section as more behavioral data arrives.
+          </p>
         </div>
-        <h2 className="text-gray-800 font-bold">Loss Conversion</h2>
-        <div className="bg-orange-100 font-bold text-orange-400 text-center px-3 lg:w-[15%] rounded-full h-6 text-sm flex items-center justify-center">
-          ACTIVE
+      ) : (
+        <div className="mt-3 flex flex-col gap-5 lg:ml-5">
+          {visibleBiases.map((bias, index) => {
+            const Icon = getIcon(bias.bias);
+            const isActive = bias.status?.toLowerCase() === "active";
+
+            const strength = Math.min(
+              Math.max(Number(bias.current_strength ?? 0), 0),
+              100
+            );
+
+            return (
+              <div
+                key={index}
+                className={`w-full rounded-2xl border p-5 ${
+                  isActive
+                    ? "border-orange-400/30 bg-orange-200/20"
+                    : "border-gray-100 bg-white"
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <div
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                      isActive ? "bg-orange-100" : "bg-gray-100"
+                    }`}
+                  >
+                    <Icon
+                      className={`h-5 w-5 ${
+                        isActive ? "text-orange-400" : "text-gray-500"
+                      }`}
+                    />
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-gray-800">
+                        {bias.bias || "Unknown Bias"}
+                      </h3>
+
+                      {isActive && (
+                        <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-400">
+                          ACTIVE
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-2 text-sm text-gray-500">
+                      {bias.explanation || "No explanation available"}
+                    </p>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <p className="text-sm text-gray-500">
+                        Current Strength
+                      </p>
+                      <p
+                        className={`text-sm font-bold ${
+                          isActive ? "text-orange-400" : "text-gray-500"
+                        }`}
+                      >
+                        {strength}% {getStrengthLabel(strength)}
+                      </p>
+                    </div>
+
+                    {/* Optional progress bar (adds polish, safe) */}
+                    <div className="mt-2 h-2 w-full rounded-full bg-gray-100">
+                      <div
+                        className={`h-2 rounded-full ${
+                          isActive ? "bg-orange-400" : "bg-gray-400"
+                        }`}
+                        style={{ width: `${strength}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
-
-      <p className="text-gray-500 ml-17 text-sm relative lg:bottom-2 pr-4 lg:pr-0">
-        Prioritizing avoiding losses over potential gains during Bayse
-        <br className="hidden lg:block" /> fear spikes
-      </p>
-
-      <div className="flex justify-between lg:justify-start ml-17 pr-5 lg:pr-0">
-        <p className="text-gray-500 text-sm">Current Strength</p>
-        <p className="text-orange-400 font-bold text-sm lg:ml-55">72% HIGH</p>
-      </div>
+      )}
     </div>
-
-    <div className="bg-white w-full h-auto lg:h-37 border-gray-100 border-2 rounded-2xl pb-4 lg:pb-0">
-      <div className="flex justify-start mt-5 ml-5 gap-2">
-        <div className="bg-gray-100 w-10 h-10 rounded-full shrink-0">
-          <Clock className="relative w-5 h-5 text-gray-500 left-2.5 top-2.5" />
-        </div>
-        <h2 className="text-gray-800 font-bold">Present Bias</h2>
-      </div>
-      <p className="text-gray-500 ml-17 text-sm relative lg:bottom-2 pr-4 lg:pr-0">
-        Tendency to prefer immediate rewards over delayed benefits
-      </p>
-      <div className="flex justify-between lg:justify-start ml-17 pr-5 lg:pr-0">
-        <p className="text-gray-500 text-sm">Current Strength</p>
-        <p className="text-gray-500 font-bold text-sm lg:ml-55">18% LOW</p>
-      </div>
-    </div>
-  </section>
-
-  {/* Second Row - Stacks on mobile, side-by-side on lg */}
-  <section className="mt-5 lg:mt-3 flex flex-col lg:flex-row lg:ml-5 justify-start gap-5">
-    <div className="bg-white w-full h-auto lg:h-37 border-gray-100 border-2 rounded-2xl pb-4 lg:pb-0">
-      <div className="flex justify-start mt-5 ml-5 gap-2">
-        <div className="bg-gray-100 w-10 h-10 rounded-full shrink-0">
-          <CheckCircle className="relative w-5 h-5 text-gray-500 left-2.5 top-2.5" />
-        </div>
-        <h2 className="text-gray-800 font-bold">Overconfidence</h2>
-      </div>
-      <p className="text-gray-500 ml-17 text-sm relative lg:bottom-2 pr-4 lg:pr-0">
-        Overestimating ability to predict outcomes when stress is low
-      </p>
-      <div className="flex justify-between lg:justify-start ml-17 pr-5 lg:pr-0">
-        <p className="text-gray-500 text-sm">Current Strength</p>
-        <p className="text-gray-500 font-bold text-sm lg:ml-55">12% LOW</p>
-      </div>
-    </div>
-
-    <div className="bg-white w-full h-auto lg:h-37 border-gray-100 border-2 rounded-2xl pb-4 lg:pb-0">
-      <div className="flex justify-start mt-5 ml-5 gap-2">
-        <div className="bg-gray-100 w-10 h-10 rounded-full shrink-0">
-          <Users className="relative w-5 h-5 text-gray-500 left-2.5 top-2.5" />
-        </div>
-        <h2 className="text-gray-800 font-bold">Herd Behavior</h2>
-      </div>
-      <p className="text-gray-500 ml-17 text-sm relative lg:bottom-2 pr-4 lg:pr-0">
-        Following peer decisions without independent analysis
-      </p>
-      <div className="flex justify-between lg:justify-start ml-17 pr-5 lg:pr-0">
-        <p className="text-gray-500 text-sm">Current Strength</p>
-        <p className="text-gray-500 font-bold text-sm lg:ml-55">24% LOW</p>
-      </div>
-    </div>
-  </section>
-
-  {/* Fifth Bias - Full width original design */}
-  <div className="bg-white w-full lg:w-[98%] lg:ml-5 mt-5 lg:mt-3 h-auto lg:h-37 border-gray-100 border-2 rounded-2xl pb-4 lg:pb-0">
-    <div className="flex justify-start mt-5 ml-5 gap-2">
-      <div className="bg-gray-100 w-10 h-10 rounded-full shrink-0">
-        <Landmark className="relative w-5 h-5 text-gray-500 left-2.5 top-2.5" />
-      </div>
-      <h2 className="text-gray-800 font-bold">Mental Accounting</h2>
-    </div>
-    <p className="text-gray-500 ml-17 text-sm relative lg:bottom-2 pr-4 lg:pr-0">
-      Treating money differently based on source (parents vs side hustle vs bursary)
-    </p>
-    <div className="flex justify-between lg:justify-start ml-17 pr-5 lg:pr-0">
-      <p className="text-gray-500 text-sm">Current Strength</p>
-      <p className="text-gray-500 font-bold text-sm lg:ml-170">31% MODERATE</p>
-    </div>
-  </div>
-</div>
-        </div>
-    )
+  );
 }

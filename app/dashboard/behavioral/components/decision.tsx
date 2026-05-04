@@ -1,72 +1,103 @@
+"use client";
+
 import { Brain } from "lucide-react";
-export default function Decision(){
-    return(
-        <div>
-            <div className="w-full mt-3 h-auto lg:h-108 bg-white border-gray-100 border-2 rounded-2xl pb-6 lg:pb-0">
-  {/* Header Section */}
-  <div className="flex justify-start gap-1">
-    <div className="bg-green-100 w-10 h-10 mt-7 relative left-5 rounded-full shrink-0">
-      <Brain className="relative w-5 h-5 text-green-400 left-2.5 top-2" />
-    </div>
-    <div className="mt-7 ml-7">
-      <h2 className="text-gray-800 font-bold text-lg">Decision Confident Score</h2>
-      <p className="text-gray-500 text-md">Current rational vs behavioral split</p>
-    </div>
-  </div>
+import { useBehavioralDataContext } from "@/context/BehavioralSnapshotContext";
+import { DEFAULT_BEHAVIORAL_SNAPSHOT } from "@/hooks/zelta";
+import { LoadingState } from "@/components/ui/State";
 
-  {/* Cards Container - Stacked on mobile, side-by-side on lg */}
-  <section className="flex flex-col lg:flex-row justify-center items-center mt-10 gap-5 px-4 lg:px-0">
-    
-    {/* Rational Card */}
-    <div className="w-full lg:w-115 h-auto lg:h-35 bg-green-50 rounded-2xl pb-4 lg:pb-0">
-      <span className="flex justify-between lg:justify-start mt-5 px-5 lg:px-0 lg:ml-5">
-        <h2 className="text-gray-800 font-bold text-md">Rational</h2>
-        <p className="text-green-600 font-bold lg:ml-65 text-4xl">58%</p>
-      </span>
-      <div className="w-[90%] lg:w-[86%] h-3 mx-auto lg:ml-4 mt-3 bg-green-100 rounded-full">
-        <div className="w-[50%] h-3 bg-[#10b981] rounded-l-full"></div>
-      </div>
-      <p className="text-gray-500 mt-3 ml-5 text-md pr-4 lg:pr-0">
-        Decisions based on Bayesian model & kelly sizing
-      </p>
-    </div>
+export default function Decision() {
+  const { snapshot, loading } = useBehavioralDataContext();
+  const data = snapshot ?? DEFAULT_BEHAVIORAL_SNAPSHOT;
 
-    {/* Behavioral Card */}
-    <div className="w-full lg:w-115 h-auto lg:h-35 bg-orange-50 rounded-2xl pb-4 lg:pb-0">
-      <span className="flex justify-between lg:justify-start mt-5 px-5 lg:px-0 lg:ml-5">
-        <h2 className="text-gray-800 flex justify-start font-bold gap-1 text-md">
-          Behavioral <span>Impulse</span>
-        </h2>
-        <p className="text-green-600 font-bold lg:ml-50 text-4xl">42%</p>
-      </span>
-      <div className="w-[90%] lg:w-[90%] h-3 mx-auto lg:ml-4 mt-3 bg-green-100 rounded-full">
-        <div className="w-[40%] h-3 bg-[#10b981] rounded-l-full"></div>
-      </div>
-      <p className="text-gray-500 mt-3 ml-5 text-sm pr-4 lg:pr-0">
-        Driven by stress, fear and market panic
-      </p>
-    </div>
-  </section>
+  if (loading) return <LoadingState text="Loading decision snapshot..." />;
 
-  {/* Confidence Gap Footer */}
-  <div className="bg-orange-200/20 border-orange-400/30 border w-[92%] lg:w-[94%] mx-auto lg:ml-7 mt-10 h-auto lg:h-25 rounded-2xl pb-4 lg:pb-0">
-    <div className="flex flex-row">
-      <div className="border-orange-300 border-2 mt-5 ml-5 rounded-full text-orange-300 w-5 h-5 flex items-center justify-center shrink-0">
-        <span className="text-sm font-bold">!</span>
-      </div>
-      <h1 className="text-gray-800 font-bold relative top-5 ml-2">
-        Confidence Gap: 16%
-      </h1>
-    </div>
+  // ✅ Safe + clamped values (same philosophy as Active.tsx)
+  const rationalPct = Math.min(Math.max(Number(data.rational_pct ?? 0), 0), 100);
+  const behavioralPct = Math.min(Math.max(Number(data.behavioral_pct ?? 0), 0), 100);
+  const confidenceGap = Math.max(Number(data.decision_gap ?? 0), 0);
 
-    <p className="text-gray-500 ml-5 mt-7 lg:mt-2 text-sm pr-4 lg:pr-0">
-      |rational recommendation - behavioral impulse| = 
-      <span className="font-bold text-gray-800"> where ZELTA adds the most value.</span> 
-      Your decisions are being moderately influenced by Bayse crowd
-      <br className="hidden lg:block" /> fear. ZELTA intervention is urgent.
-    </p>
-  </div>
-</div>
+  return (
+    <section className="mt-3 w-full rounded-2xl border border-gray-100 bg-white pb-6">
+      <div className="flex gap-3 p-5">
+        <div className="mt-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100">
+          <Brain className="h-5 w-5 text-green-400" />
         </div>
-    )
+
+        <div>
+          <h2 className="text-lg font-bold text-gray-800">
+            Decision Confidence Score
+          </h2>
+          <p className="text-sm text-gray-500">
+            Current rational vs behavioral split
+          </p>
+        </div>
+      </div>
+
+      {/* ───────── MAIN CARDS ───────── */}
+      <section className="mt-2 flex flex-col gap-5 px-4 lg:flex-row lg:justify-center">
+        {/* Rational */}
+        <div className="w-full rounded-2xl bg-green-50 p-5 lg:max-w-xl">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-800">Rational</h3>
+            <p className="text-4xl font-bold text-green-600">
+              {rationalPct}%
+            </p>
+          </div>
+
+          <div className="mt-3 h-3 overflow-hidden rounded-full bg-green-100">
+            <div
+              className="h-3 rounded-full bg-[#10b981]"
+              style={{ width: `${rationalPct}%` }}
+            />
+          </div>
+
+          <p className="mt-3 text-sm text-gray-500">
+            Decisions based on Bayesian model and Kelly sizing.
+          </p>
+        </div>
+
+        {/* Behavioral */}
+        <div className="w-full rounded-2xl bg-orange-50 p-5 lg:max-w-xl">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-800">Behavioral Impulse</h3>
+            <p className="text-4xl font-bold text-orange-600">
+              {behavioralPct}%
+            </p>
+          </div>
+
+          <div className="mt-3 h-3 overflow-hidden rounded-full bg-orange-100">
+            <div
+              className="h-3 rounded-full bg-orange-400"
+              style={{ width: `${behavioralPct}%` }}
+            />
+          </div>
+
+          <p className="mt-3 text-sm text-gray-500">
+            Driven by stress, fear, and market panic.
+          </p>
+        </div>
+      </section>
+
+      {/* ───────── GAP SECTION ───────── */}
+      <div className="mx-4 mt-6 rounded-2xl border border-orange-400/30 bg-orange-200/20 p-5">
+        <div className="flex items-center gap-2">
+          <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-orange-300 text-orange-300">
+            <span className="text-xs font-bold">!</span>
+          </div>
+
+          <h4 className="font-bold text-gray-800">
+            Confidence Gap: {confidenceGap}%
+          </h4>
+        </div>
+
+        <p className="mt-3 text-sm text-gray-500">
+          | rational recommendation - behavioral impulse | ={" "}
+          <span className="font-bold text-gray-800">
+            {confidenceGap}%
+          </span>
+          . ZELTA adds the most value here.
+        </p>
+      </div>
+    </section>
+  );
 }
