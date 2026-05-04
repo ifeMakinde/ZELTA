@@ -1,7 +1,7 @@
 import { AuthProvider } from "@/context/authContext";
 import { JSX } from "react";
 
-// const BASE_URL = "https://zelta-backend-990094999937.us-central1.run.app/";
+// const BASE_URL = "https://zelta-878473667930.us-central1.run.app/";
 
 export default function AuthLayout({
   children,

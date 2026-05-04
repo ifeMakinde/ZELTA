@@ -1,19 +1,21 @@
 // "use client";
 import type { Metadata } from "next";
-import { Open_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
-
+import { ZeltaProvider } from "@/context/zeltaContext";
+import PageTransitionLoader from "@/components/PageTransitionLoader";
 // import { ThemeContextProvider, UseTheme } from "../context/themeContext";
-// const inter = Inter({
-//   variable: "--font-inter",
-//   subsets: ["latin"],
-// });
 
-const openSans = Open_Sans({
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-  display: "swap",
-  variable: "--font-open-sans",
 });
+
+// const openSans = Open_Sans({
+//   subsets: ["latin"],
+//   display: "swap",
+//   variable: "--font-open-sans",
+// });
 
 export const metadata: Metadata = {
   title: "Zelta AI",
@@ -24,8 +26,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${openSans.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col">
+        <PageTransitionLoader />
+        <ZeltaProvider>{children}</ZeltaProvider>
+      </body>
     </html>
   );
 }
