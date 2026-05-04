@@ -3,8 +3,21 @@
 import { Target } from "lucide-react";
 import Button from "@/components/Button";
 import { useRouter } from "next/navigation";
+// import { Verdict } from "@/types/zelta";
 
-export default function WeeklyVerdictCard() {
+interface VerdictProp {
+  invest_ngn: number;
+  save_ngn?: number;
+  hold_ngn?: number;
+  allocation_plain: string;
+}
+
+export default function WeeklyVerdictCard({
+  invest_ngn,
+  save_ngn,
+  hold_ngn,
+  allocation_plain,
+}: VerdictProp) {
   const navigate = useRouter();
   return (
     <div className="bg-green-500 text-white p-6 rounded-xl space-y-5 ">
@@ -22,16 +35,17 @@ export default function WeeklyVerdictCard() {
       <div>
         <p className="text-sm uppercase opacity-80">Recommendation</p>
 
-        <h3 className="text-2xl lg:text-5xl font-bold">Invest ₦5,300</h3>
+        <h3 className="text-2xl lg:text-5xl font-bold">Invest ₦{invest_ngn}</h3>
 
         <p className="text-sm mt-2 opacity-90">
-          Adjusted for your stress level and market conditions.
+          {allocation_plain}
+          {/* Adjusted for your stress level and market conditions. */}
         </p>
       </div>
 
       <div className="flex gap-3">
-        <Stat title="Save" value="₦X,000" />
-        <Stat title="Hold Cash" value="₦X,000" />
+        <Stat title="Save" value={`₦${save_ngn}`} />
+        <Stat title="Hold Cash" value={`₦${hold_ngn}`} />
       </div>
 
       <Button

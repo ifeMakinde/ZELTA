@@ -6,8 +6,8 @@ import {
   Brain,
   Sparkles,
   MessageSquare,
-  User,
-  History,
+  // User,
+  // History,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -37,25 +37,25 @@ const navItems = [
     label: "Co-Pilot",
     href: "/dashboard/co-pilot",
   },
-  {
-    icon: (
-      <History className=" stroke-2 lg:stroke-1 active:fill-green-500 size-6 " />
-    ),
-    label: "History",
-    href: "/dashboard/history",
-  },
-  {
-    icon: <User className=" stroke-2 lg:stroke-1size-6" />,
-    label: "Profile",
-    href: "/dashboard/profile",
-  },
+  // {
+  //   icon: (
+  //     <History className=" stroke-2 lg:stroke-1 active:fill-green-500 size-6 " />
+  //   ),
+  //   label: "History",
+  //   href: "/dashboard/history",
+  // },
+  // {
+  //   icon: <User className=" stroke-2 lg:stroke-1size-6" />,
+  //   label: "Profile",
+  //   href: "/dashboard/profile",
+  // },
 ];
 
 export default function Sidebar() {
   const pathName = usePathname();
-  const mobileNavigationWithoutProfileAndHistortyTab = navItems.filter(
-    (item, index) => index < 5,
-  );
+  // const mobileNavigationWithoutProfileAndHistortyTab = navItems.filter(
+  //   (item, index) => index < 5,
+  // );
   return (
     <aside className="flex flex-col lg:h-full lg:justify-between lg:p-6 pb-0 fixed left-0 bottom-0 w-full lg:bottom-auto lg:w-64 lg:top-0 overflow-hidden z-1000">
       <div className="">
@@ -64,8 +64,8 @@ export default function Sidebar() {
           <p className="text-sm text-slate-500">Financial Intelligence</p>
         </div>
 
-        <nav className="lg:space-y-2 flex justify-center items-center sm:gap-3 md:gap-8 lg:block lg:p-0 p-2  ">
-          {mobileNavigationWithoutProfileAndHistortyTab.map((item) => (
+        <nav className="lg:space-y-2 flex bg-white lg:bg-transparent justify-center items-center sm:gap-8 md:gap-8 lg:block lg:p-0 p-2  ">
+          {navItems.map((item) => (
             <Link
               key={item.label}
               href={item.href}

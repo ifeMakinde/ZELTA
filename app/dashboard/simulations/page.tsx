@@ -9,26 +9,17 @@ function page() {
 
   function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>): void {
     setAmount(e.target.value);
-  };
+  }
 
   return (
     <div className="px-3 lg:px-0">
+      {/* HEADER */}
+      <PageHeader
+        title={`Portfolio Simulations`}
+        description="Practice before you commit — Bayesian Monte Carlo projection"
+      ></PageHeader>
 
       {/* HEADER */}
-      <section>
-        <PageHeader
-          title={
-            <span className="font-bold text-gray-800 text-2xl md:text-3xl lg:text-4xl">
-              Portfolio Simulations
-            </span>
-          }
-          description={
-            <span className="font-light text-gray-500 text-sm md:text-base">
-              Practice before you commit — Bayesian Monte Carlo projection
-            </span>
-          }
-        />
-      </section>
 
       {/* STATS */}
       <div className="bg-white/5 border-2 border-gray-100 mt-3 w-full rounded-2xl p-4">
@@ -38,10 +29,13 @@ function page() {
 
         {/* MOBILE: grid | DESKTOP: keep your flex feel */}
         <section className="grid grid-cols-2 gap-3 mt-4 lg:flex lg:gap-2">
-
           {[
             { title: "Free Cash", value: "₦26,500", color: "text-gray-800" },
-            { title: "Stress Index", value: "34/100", color: "text-emerald-500" },
+            {
+              title: "Stress Index",
+              value: "34/100",
+              color: "text-emerald-500",
+            },
             { title: "Bayse Fear", value: "68%", color: "text-orange-400" },
             { title: "ZELTA Model", value: "54%", color: "text-emerald-500" },
           ].map((item, i) => (
@@ -49,9 +43,7 @@ function page() {
               key={i}
               className="border-2 border-gray-100 bg-white rounded-2xl p-3 flex flex-col justify-center lg:w-[40%]"
             >
-              <h3 className="text-gray-500 text-xs md:text-sm">
-                {item.title}
-              </h3>
+              <h3 className="text-gray-500 text-xs md:text-sm">{item.title}</h3>
               <p className={`font-bold text-lg md:text-xl ${item.color}`}>
                 {item.value}
               </p>
@@ -62,7 +54,6 @@ function page() {
 
       {/* SIMULATOR */}
       <section className="mt-3 bg-white border-2 border-gray-100 rounded-2xl p-4 lg:p-6">
-
         {/* HEADER */}
         <div className="flex gap-3 items-start">
           <div className="bg-green-100 rounded-full w-10 h-10 flex items-center justify-center">
@@ -101,16 +92,12 @@ function page() {
 
         {/* OPTIONS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
-
           {[
             { title: "Time Horizon", value: "3 Weeks" },
             { title: "Business Type", value: "Catering" },
             { title: "Risk Level", value: "Moderate" },
           ].map((item, i) => (
-            <div
-              key={i}
-              className="bg-gray-100/40 rounded-2xl p-4"
-            >
+            <div key={i} className="bg-gray-100/40 rounded-2xl p-4">
               <h3 className="text-gray-500 font-bold text-xs md:text-sm">
                 {item.title}
               </h3>
@@ -142,8 +129,9 @@ function page() {
         </div>
 
         <p className="text-gray-500 mt-2 text-xs md:text-sm leading-relaxed">
-          ZELTA runs Bayesian Monte Carlo projections (1,000 simulations) using your side hustle variables.
-          Kelly Criterion then sizes the safe allocation based on current Bayse crowd signals and your stress index.
+          ZELTA runs Bayesian Monte Carlo projections (1,000 simulations) using
+          your side hustle variables. Kelly Criterion then sizes the safe
+          allocation based on current Bayse crowd signals and your stress index.
           The simulation adjusts in real-time when Bayse market prices shift.
         </p>
       </div>
