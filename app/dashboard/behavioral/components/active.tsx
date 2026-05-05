@@ -53,7 +53,7 @@ export default function Active() {
             <div
               className="h-3 rounded-full bg-[#10b981]"
               style={{
-                width: `${Math.min(Math.max(data.bias_strength_value ?? 0, 0), 100)}%`,
+                width: `${Math.min(Math.max(Math.round((data.bias_strength_value ?? 0) * 100), 0), 100)}%`,
               }}
             />
           </div>

@@ -13,9 +13,10 @@ export default function Bayse() {
 
   if (loading) return <LoadingState text="Loading Bayse snapshot..." />;
 
-  const crowdFear = Number(data.bayse_crowd_fear ?? 0);
-  const zeltaModel = Number(data.bayse_zelta_model ?? 0);
-  const gap = Number(data.bayse_gap ?? Math.abs(crowdFear - zeltaModel));
+  const crowdFear = Math.round(Number(data.bayse_crowd_fear ?? 0) * 100);
+  const zeltaModel = Math.round(Number(data.bayse_zelta_model ?? 0) * 100);
+  const gapRaw = Number(data.bayse_gap ?? 0);
+  const gap = Math.round(Math.abs(gapRaw) * 100);
 
   const comparison =
     crowdFear > zeltaModel

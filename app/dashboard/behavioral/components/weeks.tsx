@@ -40,7 +40,9 @@ export default function Weeks() {
         </div>
       ) : (
         <section className="mt-6 space-y-4">
-          {weeks.slice(0, 8).map((weekData, index) => (
+          {weeks.slice(0, 8).map((weekData, index) => {
+            const strengthPct = Math.round((weekData.strength ?? 0) * 100);
+            return (
             <div key={index} className="flex items-center gap-3">
               <h3 className="w-14 shrink-0 text-sm text-gray-500">
                 Week {weekData.week}
@@ -48,20 +50,21 @@ export default function Weeks() {
 
               <div className="h-10 flex-1 overflow-hidden rounded-full bg-gray-100">
                 <div
-                  className={`flex h-full items-center rounded-full text-sm font-bold text-gray-800 ${getBgColor(
+                  className={`flex h-full items-center rounded-full text-sm font-bold text-white ${getBgColor(
                     weekData.bias,
                   )}`}
-                  style={{ width: `${weekData.strength}%` }}
+                  style={{ width: `${Math.max(strengthPct, 8)}%` }}
                 >
-                  <span className="ml-5 whitespace-nowrap">{weekData.bias}</span>
+                  <span className="ml-3 whitespace-nowrap text-xs">{weekData.bias}</span>
                 </div>
               </div>
 
               <p className="shrink-0 text-sm font-bold text-gray-800">
-                {weekData.strength}%
+                {strengthPct}%
               </p>
             </div>
-          ))}
+            );
+          })}
         </section>
       )}
     </div>

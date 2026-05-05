@@ -68,7 +68,7 @@ export default function Five() {
             const isActive = bias.status?.toLowerCase() === "active";
 
             const strength = Math.min(
-              Math.max(Number(bias.current_strength ?? 0), 0),
+              Math.max(Math.round(Number(bias.current_strength ?? 0) * 100), 0),
               100
             );
 
