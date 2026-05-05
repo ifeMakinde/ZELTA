@@ -3,10 +3,15 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Bell, History, User, Settings, LogOut, ChevronDown } from "lucide-react";
-import { auth } from "@/firebase/index";
-import { signOut } from "firebase/auth";
-import { useAuthState } from "react-firebase-hooks/auth";
+import {
+  Bell,
+  History,
+  User,
+  Settings,
+  LogOut,
+} from "lucide-react";
+import { signOut, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { getFirebaseAuth } from "@/firebase/index";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -21,50 +26,63 @@ const PAGE_TITLES: Record<string, string> = {
 export default function DashboardHeader() {
   const router = useRouter();
   const pathname = usePathname();
-  const [user] = useAuthState(auth);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const pageTitle = PAGE_TITLES[pathname] ?? "Dashboard";
+  const auth = getFirebaseAuth();
 
-  // Close dropdown on outside click
+  useEffect(() => {
+    if (!auth) return;
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+
+    return () => unsubscribe();
+  }, [auth]);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setDropdownOpen(false);
       }
     }
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleSignOut = async () => {
-    await signOut(auth);
+    if (auth) {
+      await signOut(auth);
+    }
     router.push("/login");
   };
 
-  // Derive initials and display name from Firebase user
-  const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
+  const displayName =
+    user?.displayName || user?.email?.split("@")[0] || "User";
+
   const initials = displayName
     .split(" ")
-    .map((n: string) => n[0])
+    .map((n) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-gray-100 bg-white px-4 py-3 lg:px-6">
-      {/* Page title */}
       <p className="text-sm font-medium text-gray-500">{pageTitle}</p>
 
-      {/* Right controls */}
       <div className="flex items-center gap-3">
-        {/* Bell */}
         <button className="relative flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100">
           <Bell className="h-5 w-5 stroke-[1.5]" />
         </button>
 
-        {/* Avatar + Dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen((prev) => !prev)}
@@ -73,16 +91,15 @@ export default function DashboardHeader() {
             {initials}
           </button>
 
-          {/* Dropdown panel */}
           {dropdownOpen && (
             <div className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-lg">
-              {/* User info */}
               <div className="border-b border-gray-100 px-4 py-3">
-                <p className="text-sm font-semibold text-gray-900">{displayName}</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {displayName}
+                </p>
                 <p className="text-xs text-gray-500">Student Account</p>
               </div>
 
-              {/* Nav links */}
               <nav className="py-1">
                 <DropdownLink
                   href="/dashboard/history"
@@ -104,7 +121,6 @@ export default function DashboardHeader() {
                 />
               </nav>
 
-              {/* Sign out */}
               <div className="border-t border-gray-100 py-1">
                 <button
                   onClick={handleSignOut}
