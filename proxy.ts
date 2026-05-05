@@ -1,3 +1,5 @@
+"use server";
+
 import { NextRequest, NextResponse } from "next/server";
 
 // Routes that require auth
@@ -10,7 +12,7 @@ function isAuthenticated(request: NextRequest): boolean {
   return request.cookies.get("zelta_session")?.value === "1";
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const authenticated = isAuthenticated(request);
 
@@ -36,7 +38,7 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-export const config = {
+export const proxyConfig = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|public|api).*)",
   ],
