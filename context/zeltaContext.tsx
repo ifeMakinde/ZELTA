@@ -7,6 +7,7 @@ import {
   useStress,
   useBayseMarkets,
   useBayseSignals,
+  useProfile,
 } from "@/hooks/zelta";
 import type {
   BrainData,
@@ -14,6 +15,7 @@ import type {
   StressData,
   MarketsData,
   BayseSignalsData,
+  UserProfile,
 } from "@/types/zelta";
 
 // ─── context shape ───────────────────────────────────────────────
@@ -30,10 +32,11 @@ interface ZeltaContextValue {
   stress: HookResult<StressData>;
   markets: HookResult<MarketsData> & { refetch: () => void };
   bayse: HookResult<BayseSignalsData> & { refetch: () => void };
+  profile: HookResult<UserProfile> & { refetch: () => void };
   // Global state
-  globalError: string | null; // First error encountered
-  globalLoading: boolean; // Any hook is loading
-  retryAll: () => void; // Retry all failed requests
+  globalError: string | null;
+  globalLoading: boolean;
+  retryAll: () => void;
 }
 
 const ZeltaContext = createContext<ZeltaContextValue | null>(null);
@@ -46,6 +49,7 @@ export function ZeltaProvider({ children }: { children: ReactNode }) {
   const stress = useStress();
   const markets = useBayseMarkets();
   const bayse = useBayseSignals();
+  const profile = useProfile();
 
   // Compute global state
   const globalError = useMemo(() => {
@@ -87,11 +91,12 @@ export function ZeltaProvider({ children }: { children: ReactNode }) {
       stress,
       markets,
       bayse,
+      profile,
       globalError,
       globalLoading,
       retryAll,
     }),
-    [brain, intelligence, stress, markets, bayse, globalError, globalLoading, retryAll]
+    [brain, intelligence, stress, markets, bayse, profile, globalError, globalLoading, retryAll]
   );
 
   return (

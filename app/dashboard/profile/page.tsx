@@ -7,7 +7,8 @@ import { CreditCard, Target, Bell, ShieldCheck, ChevronRight, LogOut } from "luc
 import { auth } from "@/firebase/index";
 import { signOut } from "firebase/auth";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { useProfile, useUpdateProfile } from "@/hooks/zelta";
+import { useUpdateProfile } from "@/hooks/zelta";
+import { useZelta } from "@/context/zeltaContext";
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 function ProfileContent() {
   const searchParams = useSearchParams();
   const [user] = useAuthState(auth);
-  const profile = useProfile();
+  const { profile } = useZelta();
   const { updateProfile } = useUpdateProfile();
 
   const [section, setSection] = useState(

@@ -9,7 +9,7 @@ import { useSideHustleSimulation, useSavingsSimulation } from "@/hooks/zelta";
 import SimulationResults from "./components/SimulationResults";
 import type { SideHustleSimRequest, SavingsSimRequest } from "@/types/zelta";
 
-function page() {
+function SimulationsPage() {
   // Form states
   const [activeTab, setActiveTab] = useState<"side-hustle" | "savings">("side-hustle");
 
@@ -412,4 +412,4 @@ function page() {
   );
 }
 
-export default page;
+export default SimulationsPage;

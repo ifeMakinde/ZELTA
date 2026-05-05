@@ -4,17 +4,21 @@ function Button({
   children,
   onClick,
   className,
+  disabled = false,
+  type = "submit",
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   className: string;
-  // type: string | null;
+  disabled?: boolean;
+  type?: "submit" | "button" | "reset";
 }) {
   return (
     <button
-      type="submit"
+      type={type}
       onClick={onClick}
-      className={`cursor-pointer ${className}`}
+      disabled={disabled}
+      className={`cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
     >
       {children}
     </button>

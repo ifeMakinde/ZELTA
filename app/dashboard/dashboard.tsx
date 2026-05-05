@@ -1,5 +1,4 @@
 "use client";
-import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
@@ -10,19 +9,18 @@ import WeeklyVerdictCard from "@/app/dashboard/WeeklyVerdictCard";
 import DecisionScoreCard from "./DecisionScoreCard";
 import StressIndexCard from "./StressIndexCard";
 import { useZelta } from "@/context/zeltaContext";
-import { useProfile } from "@/hooks/zelta";
 
 const hour = new Date().getHours();
 const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
 function Dashboard() {
-  const { intelligence, globalError, globalLoading, retryAll } = useZelta();
-  const profile = useProfile();
+  const { intelligence, globalError, globalLoading, retryAll, profile } = useZelta();
   const [errorDismissed, setErrorDismissed] = useState(false);
 
   const {
     stress_index,
     stress_level,
+    active_bias,
     bias_explanation,
     confidence_gap,
     crowd_yes,
@@ -86,6 +84,7 @@ function Dashboard() {
 
           {/* DASHBOARD HOME WODGET 4 */}
           <BiasAlertCard
+            active_bias={active_bias}
             bias_explanation={bias_explanation}
             loading={intelligence.loading}
             error={null}

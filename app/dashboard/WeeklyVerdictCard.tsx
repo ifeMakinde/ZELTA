@@ -35,7 +35,7 @@ export default function WeeklyVerdictCard({
       <div>
         <p className="text-sm uppercase opacity-80">Recommendation</p>
 
-        <h3 className="text-2xl lg:text-5xl font-bold">Invest ₦{invest_ngn}</h3>
+        <h3 className="text-2xl lg:text-5xl font-bold">Invest ₦{invest_ngn.toLocaleString()}</h3>
 
         <p className="text-sm mt-2 opacity-90">
           {allocation_plain}
@@ -44,8 +44,8 @@ export default function WeeklyVerdictCard({
       </div>
 
       <div className="flex gap-3">
-        <Stat title="Save" value={`₦${save_ngn}`} />
-        <Stat title="Hold Cash" value={`₦${hold_ngn}`} />
+        <Stat title="Save" value={`₦${(save_ngn ?? 0).toLocaleString()}`} />
+        <Stat title="Hold Cash" value={`₦${(hold_ngn ?? 0).toLocaleString()}`} />
       </div>
 
       <Button
