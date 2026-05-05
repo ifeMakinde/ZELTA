@@ -74,8 +74,8 @@ function Dashboard() {
         <main className="pb-8 space-y-3">
           {/*  DASHBOARD HOMEPAGE WIWDGET 1 */}
           <MarketAlert
-            fear={bayseFear}
-            bayse_market={bayse_market}
+            crowd_yes={bayseFear}
+            bayse_market={marketTitle}
             loading={globalLoading}
             error={null}
           />
@@ -83,9 +83,10 @@ function Dashboard() {
 
           {/*  DASHBOARD HOMEPAGE WIWDGET 3 */}
           <StressIndexCard
-            stress_index={stress_index}
-            stress_level={stress_level}
-            bayse_primary={baysePrimary}
+            stress_index={stressIndex}
+            stress_level={stressLevel}
+            stress_label={stressLabel}
+            crowd_yes={baysePrimary}
             market_probability={marketProbabilitySource}
             loading={globalLoading}
             error={null}
