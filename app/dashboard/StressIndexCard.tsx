@@ -71,7 +71,7 @@ export default function StressIndexCard({
   }
 
   // stress_index from /api/intelligence is 0-1 → multiply by 100
-  const stressDisplay = Math.round(safeNum(stress_index) * 100);
+  const stressDisplay = Math.round(safeNum(stress_index));
 
   // bayse_primary is 0-1
   const bayseSignalPct = pct(bayse_primary);
