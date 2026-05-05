@@ -14,12 +14,13 @@ const hour = new Date().getHours();
 const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
 function Dashboard() {
-  const { intelligence, globalError, globalLoading, retryAll, profile } = useZelta();
+  const { intelligence, globalError, globalLoading, retryAll, profile, stress, bayse } = useZelta();
   const [errorDismissed, setErrorDismissed] = useState(false);
 
   const {
     stress_index,
     stress_level,
+    stress_label,
     active_bias,
     bias_explanation,
     confidence_gap,
@@ -34,6 +35,14 @@ function Dashboard() {
     hold_ngn,
     allocation_plain,
   } = intelligence.data || {};
+
+  const stressIndex = stress.data?.combined_index ?? stress_index;
+  const stressLevel = stress.data?.level ?? stress_level;
+  const stressLabel = stress.data?.label ?? stress_label;
+  const bayseFear = bayse.data?.stress?.raw_crowd_stress ?? (crowd_yes ?? 0);
+  const baysePrimary = stress.data?.bayse_primary ?? (intelligence.data?.bayse_primary ?? 0);
+  const marketProbabilitySource = stress.data?.market_probability ?? (market_probability ?? 0);
+  const marketTitle = bayse_market ?? bayse.data?.stress?.market_title ?? "Bayse market";
 
   // Name: prefer profile API → Firebase display name → fallback
   const displayName = profile.data?.name || "there";
@@ -65,9 +74,9 @@ function Dashboard() {
         <main className="pb-8 space-y-3">
           {/*  DASHBOARD HOMEPAGE WIWDGET 1 */}
           <MarketAlert
-            crowd_yes={crowd_yes}
+            fear={bayseFear}
             bayse_market={bayse_market}
-            loading={intelligence.loading}
+            loading={globalLoading}
             error={null}
           />
           {/*  DASHBOARD HOMEPAGE WIWDGET 2 */}
@@ -76,9 +85,9 @@ function Dashboard() {
           <StressIndexCard
             stress_index={stress_index}
             stress_level={stress_level}
-            crowd_yes={crowd_yes}
-            market_probability={market_probability}
-            loading={intelligence.loading}
+            bayse_primary={baysePrimary}
+            market_probability={marketProbabilitySource}
+            loading={globalLoading}
             error={null}
           />
 

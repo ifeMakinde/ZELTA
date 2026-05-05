@@ -8,7 +8,8 @@ interface Props {
   password: string;
   setPassword: React.Dispatch<React.SetStateAction<string>>;
   handleSignUp: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
-  // password: string;
+  authenticationError: string | null;
+  loading: boolean;
 }
 
 export default function SignUpForm({
@@ -17,6 +18,8 @@ export default function SignUpForm({
   setEmail,
   setPassword,
   handleSignUp,
+  authenticationError,
+  loading,
 }: Props) {
   const navigate = useRouter();
 
@@ -56,8 +59,19 @@ export default function SignUpForm({
           />
         </label>
 
-        <Button className="w-full rounded-xl bg-[#10b981] text-white px-4 py-2 hover:bg-[#0b825a]">
-          Sign Up
+        {authenticationError && (
+          <div className="error-message">
+            <p className="text-red-500 text-center text-[14px]">
+              {authenticationError}
+            </p>
+          </div>
+        )}
+
+        <Button
+          className="w-full rounded-xl bg-[#10b981] text-white px-4 py-2 hover:bg-[#0b825a] disabled:opacity-50"
+          disabled={loading}
+        >
+          {loading ? "Creating account..." : "Sign Up"}
         </Button>
 
         <div className="text-center">

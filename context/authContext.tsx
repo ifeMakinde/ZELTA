@@ -50,7 +50,10 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const response = await createUserWithEmailAndPassword(auth, email, password);
-      console.log(response.user);
+      if (response.user) {
+        navigate.push("/form");
+        return;
+      }
     } catch (error: unknown) {
       const firebaseError = error as { code?: string };
 

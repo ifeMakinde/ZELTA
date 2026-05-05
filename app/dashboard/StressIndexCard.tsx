@@ -6,7 +6,7 @@ interface StressIndexCardProps {
   stress_index?: number;
   stress_level?: StressLevel;
   stress_label?: string;
-  crowd_yes?: number;
+  bayse_primary?: number;
   market_probability?: number;
   loading?: boolean;
   error?: string | null;
@@ -16,7 +16,7 @@ export default function StressIndexCard({
   stress_index,
   stress_level,
   stress_label,
-  crowd_yes,
+  bayse_primary,
   market_probability,
   loading = false,
   error = null,
@@ -102,12 +102,12 @@ export default function StressIndexCard({
       <div className="flex gap-3">
         <MiniStat
           title="Bayse Crowd"
-          value={`${Math.floor(crowd_yes ?? 0) * 100}%`}
+          value={`${Math.round(bayse_primary ?? 0)}%`}
           color="orange"
         />
         <MiniStat
           title="Zelta Model"
-          value={`${Math.floor(market_probability ?? 0) * 100}%`}
+          value={`${Math.round((market_probability ?? 0) * 100)}%`}
           color="green"
         />
       </div>

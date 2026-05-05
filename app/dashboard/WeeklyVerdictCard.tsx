@@ -51,7 +51,7 @@ export default function WeeklyVerdictCard({
       <Button
         className="w-full bg-white p-2 text-green-700 rounded-lg "
         onClick={() => {
-          navigate.push("/dashboard/wallet");
+          navigate.push("/dashboard/simulations");
         }}
       >
         Run Full Simulation
