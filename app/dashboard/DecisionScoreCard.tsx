@@ -67,11 +67,11 @@ export default function DecisionScoreCard({
         <ArrowDownRight />
       </div>
 
-      <Bar label="Rational" value={rational_pct ?? 0} color="green" />
-      <Bar label="Impulse" value={behavioral_pct ?? 0} color="orange" />
+      <Bar label="Rational" value={Math.round((rational_pct ?? 0) * 100)} color="green" />
+      <Bar label="Impulse" value={Math.round((behavioral_pct ?? 0) * 100)} color="orange" />
 
       <div className="bg-green-50 text-[#444] p-3 rounded-lg text-sm">
-        <strong>Confidence Gap: {confidence_gap}%</strong> –{" "}
+        <strong>Confidence Gap: {Math.round((confidence_gap ?? 0) * 100)}%</strong> –{" "}
         {`${bias_confidence} urgency `}
       </div>
     </div>

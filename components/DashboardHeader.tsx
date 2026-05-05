@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { signOut, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 import { getFirebaseAuth } from "@/firebase/index";
+import { clearSessionCookie } from "@/context/authContext";
+import { useZelta } from "@/context/zeltaContext";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -26,50 +28,52 @@ const PAGE_TITLES: Record<string, string> = {
 export default function DashboardHeader() {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { profile } = useZelta();
 
   const pageTitle = PAGE_TITLES[pathname] ?? "Dashboard";
   const auth = getFirebaseAuth();
 
   useEffect(() => {
     if (!auth) return;
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
-
+    const unsubscribe = onAuthStateChanged(auth, (u) => setFirebaseUser(u));
     return () => unsubscribe();
   }, [auth]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
       }
     }
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleSignOut = async () => {
-    if (auth) {
-      await signOut(auth);
-    }
+    // 1. Clear the session cookie FIRST so middleware blocks protected routes
+    clearSessionCookie();
+
+    // 2. Sign out of Firebase
+    const authInstance = getFirebaseAuth();
+    if (authInstance) await signOut(authInstance);
+
+    // 3. Navigate to login
     router.push("/login");
   };
 
+  // Prefer: profile API name → Firebase display name → email prefix → "User"
   const displayName =
-    user?.displayName || user?.email?.split("@")[0] || "User";
+    profile.data?.name ||
+    firebaseUser?.displayName ||
+    firebaseUser?.email?.split("@")[0] ||
+    "User";
 
   const initials = displayName
     .split(" ")
-    .map((n) => n[0])
+    .map((n: string) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
@@ -94,9 +98,7 @@ export default function DashboardHeader() {
           {dropdownOpen && (
             <div className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-lg">
               <div className="border-b border-gray-100 px-4 py-3">
-                <p className="text-sm font-semibold text-gray-900">
-                  {displayName}
-                </p>
+                <p className="text-sm font-semibold text-gray-900">{displayName}</p>
                 <p className="text-xs text-gray-500">Student Account</p>
               </div>
 

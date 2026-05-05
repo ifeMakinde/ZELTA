@@ -6,10 +6,20 @@ interface StressIndexCardProps {
   stress_index?: number;
   stress_level?: StressLevel;
   stress_label?: string;
-  crowd_yes?: number;
-  market_probability?: number;
+  crowd_yes?: number;       // 0-1 decimal from IntelligenceData
+  market_probability?: number; // 0-1 decimal
+  bayse_primary?: number;   // 0-1 decimal
   loading?: boolean;
   error?: string | null;
+}
+
+function safeNum(v: number | undefined | null): number {
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+}
+
+function pct(v: number | undefined | null): number {
+  return Math.round(safeNum(v) * 100);
 }
 
 export default function StressIndexCard({
@@ -18,28 +28,28 @@ export default function StressIndexCard({
   stress_label,
   crowd_yes,
   market_probability,
+  bayse_primary,
   loading = false,
   error = null,
 }: StressIndexCardProps) {
-  // Loading skeleton
   if (loading) {
     return (
-      <div className="bg-white p-5 rounded-xl space-y-5 shadow-sm">
-        <div className="flex justify-between items-center">
-          <p className="font-bold uppercase text-sm">Student Stress Index</p>
-          <span className="p-2 bg-gray-200 rounded-lg animate-pulse w-10 h-10" />
+      <div className="bg-white p-5 rounded-xl space-y-4 shadow-sm animate-pulse">
+        <div className="flex justify-between">
+          <div className="h-4 bg-gray-200 rounded w-40" />
+          <div className="h-9 w-9 bg-gray-200 rounded-lg" />
         </div>
-        <div className="h-8 bg-gray-200 rounded animate-pulse" />
-        <div className="h-6 bg-gray-200 rounded w-32 animate-pulse" />
-        <div className="space-y-2">
-          <div className="h-4 bg-gray-200 rounded animate-pulse" />
-          <div className="h-2 bg-gray-200 rounded animate-pulse" />
+        <div className="h-8 bg-gray-200 rounded w-24" />
+        <div className="h-6 bg-gray-200 rounded w-16" />
+        <div className="h-2 bg-gray-200 rounded-full w-full" />
+        <div className="flex gap-3">
+          <div className="flex-1 h-14 bg-gray-200 rounded-lg" />
+          <div className="flex-1 h-14 bg-gray-200 rounded-lg" />
         </div>
       </div>
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="bg-white p-5 rounded-xl shadow-sm border border-red-200">
@@ -48,46 +58,31 @@ export default function StressIndexCard({
     );
   }
 
-  // No data state
   if (stress_index === undefined || stress_index === null) {
     return (
-      <div className="bg-white p-5 rounded-xl space-y-5 shadow-sm">
-        <div className="flex justify-between items-center">
+      <div className="bg-white p-5 rounded-xl space-y-4 shadow-sm">
+        <div className="flex justify-between">
           <p className="font-bold uppercase text-sm">Student Stress Index</p>
-          <span className="p-2 bg-green-100 rounded-lg">
-            <TrendingDown color="green" />
-          </span>
+          <span className="p-2 bg-green-100 rounded-lg"><TrendingDown color="green" /></span>
         </div>
-        <p className="text-gray-400 text-sm">Loading data...</p>
+        <p className="text-gray-400 text-sm">Loading stress data...</p>
       </div>
     );
   }
 
-  // Determine stress colour based on level
-  const stressColor =
-    stress_level === "CRISIS"
-      ? "text-red-500"
-      : stress_level === "MODERATE"
-      ? "text-yellow-500"
-      : "text-green-500";
+  // stress_index from /api/intelligence is 0-1 → multiply by 100
+  const stressDisplay = Math.round(safeNum(stress_index) * 100);
 
-  const badgeBg =
-    stress_level === "CRISIS"
-      ? "bg-red-50 text-red-600"
-      : stress_level === "MODERATE"
-      ? "bg-yellow-50 text-yellow-600"
-      : "bg-green-50 text-green-600";
+  // bayse_primary is 0-1
+  const bayseSignalPct = pct(bayse_primary);
 
-  const barColor =
-    stress_level === "CRISIS"
-      ? "#ef4444"
-      : stress_level === "MODERATE"
-      ? "#eab308"
-      : "#22c55e";
+  // crowd_yes is 0-1 (crowd_yes_price from Bayse); fall back to bayse_primary
+  const crowdDisplay = crowd_yes !== undefined ? pct(crowd_yes) : bayseSignalPct;
 
-  // crowd_yes and market_probability are decimal fractions (0–1) from API
-  const crowdPct = Math.round((crowd_yes ?? 0) * 100);
-  const modelPct = Math.round((market_probability ?? 0) * 100);
+  // market_probability is 0-1; fall back to inverse of crowd
+  const modelDisplay = market_probability !== undefined
+    ? pct(market_probability)
+    : Math.max(0, 100 - crowdDisplay);
 
   return (
     <div className="bg-white p-5 rounded-xl space-y-4 shadow-sm">
@@ -98,26 +93,24 @@ export default function StressIndexCard({
         </span>
       </div>
 
-      <h2 className={`text-3xl font-bold ${stressColor}`}>
-        {stress_index}<span className="text-lg font-normal text-gray-400">/100</span>
-      </h2>
+      <h2 className="text-3xl font-bold text-green-500">{stressDisplay}/100</h2>
 
-      <span className={`inline-block px-3 py-1 rounded-lg text-sm font-medium ${badgeBg}`}>
-        {stress_level ?? "UNKNOWN"}
-      </span>
+      {stress_level && (
+        <span className="inline-block bg-green-50 text-green-600 px-3 py-1 rounded-lg text-sm font-medium">
+          {stress_level}
+        </span>
+      )}
 
-      {/* Progress bar */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-sm text-gray-500">
+      <div className="p-2">
+        <div className="flex justify-between text-sm mb-1">
           <span>Bayse Primary Signal</span>
-          <span>{stress_index}%</span>
+          <span>{bayseSignalPct}%</span>
         </div>
-        <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-          <div
-            className="h-2 rounded-full transition-all duration-500"
-            style={{ width: `${Math.min(stress_index, 100)}%`, backgroundColor: barColor }}
-          />
-        </div>
+        <progress
+          value={stressDisplay}
+          max={100}
+          className="w-full h-2 rounded-full"
+        />
       </div>
 
       {stress_label && (
@@ -125,27 +118,18 @@ export default function StressIndexCard({
       )}
 
       <div className="flex gap-3">
-        <MiniStat title="Bayse Crowd" value={`${crowdPct}%`} color="orange" />
-        <MiniStat title="Zelta Model" value={`${modelPct}%`} color="green" />
+        <MiniStat title="Bayse Crowd" value={`${crowdDisplay}%`} color="orange" />
+        <MiniStat title="Zelta Model" value={`${modelDisplay}%`} color="green" />
       </div>
     </div>
   );
 }
 
-function MiniStat({
-  title,
-  value,
-  color,
-}: {
-  title: string;
-  value: string;
-  color: "green" | "orange";
-}) {
-  const textColor = color === "green" ? "text-green-500" : "text-orange-500";
+function MiniStat({ title, value, color }: { title: string; value: string; color: "green" | "orange" }) {
   return (
     <div className="flex-1 p-3 bg-gray-50 rounded-lg">
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className={`font-semibold ${textColor}`}>{value}</p>
+      <p className="text-sm">{title}</p>
+      <p className={`font-semibold text-${color}-500`}>{value}</p>
     </div>
   );
 }

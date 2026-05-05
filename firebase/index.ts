@@ -16,12 +16,17 @@ function getFirebaseConfig() {
   const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID;
 
   if (!apiKey || !authDomain || !projectId || !storageBucket || !messagingSenderId || !appId) {
+    console.warn("[Firebase] Missing required env vars — Firebase will not initialize.");
     return null;
   }
 
   return { apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId, measurementId };
 }
 
+/**
+ * Returns the Firebase Auth singleton. Safe to call multiple times.
+ * Returns null during SSR or if env vars are missing.
+ */
 export function getFirebaseAuth(): Auth | null {
   if (typeof window === "undefined") return null;
   if (_auth) return _auth;
@@ -29,28 +34,33 @@ export function getFirebaseAuth(): Auth | null {
   const config = getFirebaseConfig();
   if (!config) return null;
 
-  _app = getApps().length ? getApp() : initializeApp(config);
-  _auth = getAuth(_app);
-  return _auth;
+  try {
+    _app = getApps().length ? getApp() : initializeApp(config);
+    _auth = getAuth(_app);
+    return _auth;
+  } catch (e) {
+    console.error("[Firebase] Initialization error:", e);
+    return null;
+  }
 }
 
-// Eagerly-typed auth singleton — safe for useAuthState and signOut.
-// Components that need the raw Auth instance should call getFirebaseAuth().
-// This proxy is exported as `auth` for backward compatibility with
-// react-firebase-hooks/auth (useAuthState(auth)).
-function createAuthProxy(): Auth {
-  return new Proxy({} as Auth, {
-    get(_target, prop) {
-      const instance = getFirebaseAuth();
-      if (!instance) {
-        // Return safe defaults for the most common hook properties
-        if (prop === "currentUser") return null;
-        return undefined;
-      }
-      const value = (instance as any)[prop];
-      return typeof value === "function" ? value.bind(instance) : value;
-    },
-  });
-}
-
-export const auth: Auth = createAuthProxy();
+/**
+ * Exported `auth` proxy — compatible with:
+ * - useAuthState(auth)
+ * - signOut(auth)
+ * - onAuthStateChanged(auth, ...)
+ *
+ * Lazily calls getFirebaseAuth() on first access.
+ */
+export const auth: Auth = new Proxy({} as Auth, {
+  get(_target, prop: string | symbol) {
+    const instance = getFirebaseAuth();
+    if (!instance) {
+      if (prop === "currentUser") return null;
+      // Return a no-op for function calls during SSR
+      return () => {};
+    }
+    const value = (instance as unknown as Record<string | symbol, unknown>)[prop];
+    return typeof value === "function" ? (value as Function).bind(instance) : value;
+  },
+});

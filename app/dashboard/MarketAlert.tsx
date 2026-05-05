@@ -1,8 +1,9 @@
 import { Activity } from "lucide-react";
 
 interface MarketAlertProps {
-  crowd_yes?: number;
+  crowd_yes?: number;     // 0-1 decimal from IntelligenceData
   bayse_market?: string;
+  bayse_primary?: number; // 0-1 decimal fallback
   loading?: boolean;
   error?: string | null;
 }
@@ -10,40 +11,22 @@ interface MarketAlertProps {
 export default function MarketAlert({
   crowd_yes,
   bayse_market,
+  bayse_primary,
   loading,
-  error,
 }: MarketAlertProps) {
   if (loading) {
-    return <div className="h-10 bg-gray-200 rounded-xl animate-pulse" />;
+    return <div className="h-10 bg-gray-100 rounded-xl animate-pulse" />;
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center gap-3 p-3 rounded-xl bg-red-50 text-sm">
-        <Activity color="red" size={20} />
-        <p className="font-medium text-red-600">Market signal unavailable</p>
-      </div>
-    );
-  }
-
-  if (!bayse_market) {
-    return (
-      <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 text-sm">
-        <Activity color="gray" size={20} />
-        <p className="font-medium text-gray-400">Awaiting market signal...</p>
-      </div>
-    );
-  }
-
-  // crowd_yes is a decimal fraction (0–1) from the API — convert to percentage for display
-  const fearPct = Math.round((crowd_yes ?? 0) * 100);
+  // Both are 0-1 decimals — multiply by 100 for display
+  const rawFear = crowd_yes ?? bayse_primary ?? 0;
+  const fearPct = Math.round((Number.isFinite(rawFear) ? rawFear : 0) * 100);
+  const market = bayse_market || "Bayse Market";
 
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl bg-orange-50 text-sm">
-      <Activity color="orange" size={20} />
-      <p className="font-medium">
-        {bayse_market}: <span className="text-orange-600 font-bold">{fearPct}%</span> crowd fear
-      </p>
+      <Activity color="orange" size={20} className="shrink-0" />
+      <p className="font-medium">{market} : {fearPct}% fear</p>
     </div>
   );
 }
