@@ -4,25 +4,20 @@ import { useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
 import DashboardOverlay from "@/components/DashboardOverlay";
-
-// import Section from "@/components/Section";
 import BiasAlertCard from "@/app/dashboard/BiasAlertCard";
 import MarketAlert from "@/app/dashboard/MarketAlert";
 import WeeklyVerdictCard from "@/app/dashboard/WeeklyVerdictCard";
 import DecisionScoreCard from "./DecisionScoreCard";
 import StressIndexCard from "./StressIndexCard";
 import { useZelta } from "@/context/zeltaContext";
+import { useProfile } from "@/hooks/zelta";
 
-const time = new Date().toLocaleString("en-US", {
-  hour: "numeric",
-  minute: "numeric",
-  hour12: true,
-});
-
-const greeting = time.includes("AM") ? "Good Morning" : "Good evening";
+const hour = new Date().getHours();
+const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
 function Dashboard() {
   const { intelligence, globalError, globalLoading, retryAll } = useZelta();
+  const profile = useProfile();
   const [errorDismissed, setErrorDismissed] = useState(false);
 
   const {
@@ -42,8 +37,8 @@ function Dashboard() {
     allocation_plain,
   } = intelligence.data || {};
 
-  const searchParam = useSearchParams();
-  const name = searchParam.get("username");
+  // Name: prefer profile API → Firebase display name → fallback
+  const displayName = profile.data?.name || "there";
 
   return (
     <>
@@ -65,9 +60,9 @@ function Dashboard() {
 
       <section className="space-y-6">
         <PageHeader
-          title={`${greeting},\n ${name}`}
+          title={`${greeting}, ${displayName}`}
           description="here's your financial intelligence for today"
-        ></PageHeader>
+        />
 
         <main className="pb-8 space-y-3">
           {/*  DASHBOARD HOMEPAGE WIWDGET 1 */}
