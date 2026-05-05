@@ -181,12 +181,17 @@ export interface IntelligenceData {
 // ─── /api/stress ─────────────────────────────────────────────────
 
 export interface StressData {
-  stress_index: number;
+  combined_index: number;
   level: StressLevel;
   label: string;
   bayse_primary: number;
   nlp_secondary: number;
   market_probability: number;
+  bayse_weight: number;
+  nlp_weight: number;
+  plain_english: string;
+  score: number;
+  stress_score: number;
 }
 
 // ─── /api/bayse/markets ──────────────────────────────────────────
@@ -208,13 +213,26 @@ export interface MarketsData {
 // ─── /api/bayse/stress ───────────────────────────────────────────
 
 export interface BayseStressData {
-  crowd_stress: number;
-  bayse_score: number;
-  bayse_status: StressLevel;
+  score: number;
+  status: StressLevel;
   market_title: string;
+  market_id: string;
+  crowd_yes_price: number;
+  crowd_no_price: number;
   mid_price: number;
+  best_bid: number;
+  best_ask: number;
   spread: number;
+  imbalance: number;
+  volume24h: number;
+  trade_count_24h: number;
   available: boolean;
+  raw_crowd_stress: number;
+  naira_weakness_probability: number;
+  outcome?: string | null;
+  last_price: number;
+  source: string;
+  updated_at?: number | null;
 }
 
 // ─── /api/bayse/sentiment ────────────────────────────────────────
@@ -381,4 +399,180 @@ export interface SimulationResponse {
       notes?: string;
     }>;
   };
+}
+
+// ─── /api/wallet ─────────────────────────────────────────────────
+
+export interface SavingsGoal {
+  id: string;
+  label: string;
+  amount: number;
+  unlock_date: string;
+  description?: string | null;
+  created_at: string;
+  is_active: boolean;
+}
+
+export interface Transaction {
+  id: string;
+  type: "income" | "expense" | "lock" | "unlock";
+  amount: number;
+  category: string;
+  description?: string | null;
+  date: string;
+  balance_after: number;
+}
+
+export interface SpendingHeatItem {
+  category: string;
+  amount: number;
+  percentage: number;
+  status: "green" | "amber" | "red";
+}
+
+export interface WalletSummary {
+  total_balance: number;
+  free_cash: number;
+  locked_amount: number;
+  total_income: number;
+  total_expenses: number;
+  weekly_burn_rate: number;
+  savings_goals: SavingsGoal[];
+  recent_transactions: Transaction[];
+  spending_heat: SpendingHeatItem[];
+  bq_alerts: string[];
+  locked_total?: number;
+}
+
+export interface WalletResponse {
+  success: boolean;
+  data: WalletSummary;
+}
+
+// ─── /api/profile ────────────────────────────────────────────────
+
+export interface FinancialProfile {
+  monthly_budget?: number | null;
+  fee_obligations: Array<Record<string, any>>;
+  income_sources: string[];
+  side_hustle_type?: string | null;
+  hostel_fee?: number | null;
+  tuition_amount?: number | null;
+  risk_tolerance: "low" | "moderate" | "high";
+  risk_preference?: string | null;
+  capital_range?: string | null;
+  monthly_income?: number | null;
+}
+
+export interface PreferencesProfile {
+  currency: string;
+  language: string;
+  stress_alert_threshold: number;
+  auto_lock_on_crisis: boolean;
+  show_bayse_prices: boolean;
+  plain_english_mode: boolean;
+  primary_goal?: string | null;
+  decision_aggressiveness?: number | null;
+  stress_sensitivity?: number | null;
+}
+
+export interface NotificationsProfile {
+  stress_alerts: boolean;
+  weekly_bq_report: boolean;
+  decision_reminders: boolean;
+  bayse_spike_alerts: boolean;
+  frequency: "daily" | "weekly" | "real_time" | "off";
+}
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  name: string;
+  picture?: string | null;
+  university?: string | null;
+  department?: string | null;
+  level?: string | null;
+  financial: FinancialProfile;
+  preferences: PreferencesProfile;
+  notifications: NotificationsProfile;
+}
+
+export interface ProfileResponse {
+  success: boolean;
+  data: UserProfile;
+}
+
+export interface UpdateProfileRequest {
+  name?: string | null;
+  university?: string | null;
+  department?: string | null;
+  level?: string | null;
+  financial?: Partial<FinancialProfile> | null;
+  preferences?: Partial<PreferencesProfile> | null;
+  notifications?: Partial<NotificationsProfile> | null;
+}
+
+// ─── /api/portfolio ──────────────────────────────────────────────
+
+export interface PerformanceMetrics {
+  total_decisions: number;
+  correct_decisions: number;
+  incorrect_decisions: number;
+  pending_decisions: number;
+  accuracy_rate: number;
+  average_decision_score: number;
+  total_invested: number;
+  total_returned: number;
+  net_pnl: number;
+  best_decision_score: number;
+  average_bayse_accuracy_gap: number;
+}
+
+export interface DecisionRecord {
+  id: string;
+  verdict: Verdict;
+  amount: number;
+  rationale: string;
+  stress_index: number;
+  bayse_fear: number;
+  bias: string;
+  decision_score: number;
+  category: string;
+  notes?: string | null;
+  actual_outcome?: number | null;
+  outcome_label: "pending" | "correct" | "incorrect" | "partial";
+  return_amount?: number | null;
+  return_percentage?: number | null;
+  created_at: string;
+  resolved_at?: string | null;
+}
+
+export interface PortfolioSummary {
+  metrics: PerformanceMetrics;
+  recent_decisions: DecisionRecord[];
+  behavioral_pattern_summary: string;
+}
+
+export interface PortfolioResponse {
+  success: boolean;
+  data: PortfolioSummary;
+}
+
+export interface LogDecisionRequest {
+  verdict: Verdict;
+  amount: number;
+  rationale: string;
+  stress_index_at_decision: number;
+  bayse_fear_at_decision: number;
+  bias_at_decision: string;
+  decision_score: number;
+  category: string;
+  notes?: string | null;
+}
+
+export interface UpdateOutcomeRequest {
+  decision_id: string;
+  actual_outcome: number;
+  outcome_label: "pending" | "correct" | "incorrect" | "partial";
+  notes?: string | null;
 }

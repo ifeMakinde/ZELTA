@@ -18,6 +18,13 @@ import type {
   WalletSummary,
   CopilotRequest,
   CopilotResponse,
+  UserProfile,
+  PortfolioSummary,
+  ProfileResponse,
+  PortfolioResponse,
+  LogDecisionRequest,
+  UpdateOutcomeRequest,
+  UpdateProfileRequest,
 } from "@/types/zelta";
 
 // --- DEVTOOLS DEBUGGER SETUP ---
@@ -439,4 +446,108 @@ export function useSavingsSimulation() {
   }, []);
 
   return { ...state, runSimulation };
+}
+
+export function useProfile() {
+  return useAsyncData<UserProfile>(
+    () => apiFetch<ProfileResponse>("/api/profile").then((res) => res.data),
+    "useProfile"
+  );
+}
+
+export function useUpdateProfile() {
+  const [state, setState] = useState<HookState<UserProfile>>({
+    data: null,
+    loading: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    trackDebugState("useUpdateProfile", state);
+  }, [state]);
+
+  const updateProfile = useCallback(async (updates: UpdateProfileRequest) => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const response = await apiFetch<ProfileResponse>("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      setState({ data: response.data, loading: false, error: null });
+      return response.data;
+    } catch (err) {
+      setState({ data: null, loading: false, error: (err as Error).message });
+      return null;
+    }
+  }, []);
+
+  return { ...state, updateProfile };
+}
+
+export function usePortfolio() {
+  return useAsyncData<PortfolioSummary>(
+    () => apiFetch<PortfolioResponse>("/api/portfolio").then((res) => res.data),
+    "usePortfolio"
+  );
+}
+
+export function useLogDecision() {
+  const [state, setState] = useState<HookState<any>>({
+    data: null,
+    loading: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    trackDebugState("useLogDecision", state);
+  }, [state]);
+
+  const logDecision = useCallback(async (decision: LogDecisionRequest) => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const data = await apiFetch<any>("/api/portfolio/decisions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(decision),
+      });
+      setState({ data, loading: false, error: null });
+      return data;
+    } catch (err) {
+      setState({ data: null, loading: false, error: (err as Error).message });
+      return null;
+    }
+  }, []);
+
+  return { ...state, logDecision };
+}
+
+export function useRecordOutcome() {
+  const [state, setState] = useState<HookState<any>>({
+    data: null,
+    loading: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    trackDebugState("useRecordOutcome", state);
+  }, [state]);
+
+  const recordOutcome = useCallback(async (outcome: UpdateOutcomeRequest) => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const data = await apiFetch<any>("/api/portfolio/decisions/outcome", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(outcome),
+      });
+      setState({ data, loading: false, error: null });
+      return data;
+    } catch (err) {
+      setState({ data: null, loading: false, error: (err as Error).message });
+      return null;
+    }
+  }, []);
+
+  return { ...state, recordOutcome };
 }

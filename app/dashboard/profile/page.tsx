@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import { CreditCard, Target, Bell, ShieldCheck, ChevronRight, LogOut } from "lucide-react";
 import { auth } from "@/firebase/index";
 import { useAuthState } from "react-firebase-hooks/auth";
+import { useProfile, useUpdateProfile } from "@/hooks/zelta";
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -34,17 +35,27 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 function ProfileContent() {
   const searchParams = useSearchParams();
   const [user] = useAuthState(auth);
+  const profile = useProfile();
+  const { updateProfile } = useUpdateProfile();
+
   const [section, setSection] = useState(
     searchParams.get("tab") === "settings" ? "notifications" : "profile"
   );
 
-  const [capitalRange, setCapitalRange] = useState("₦10,000 - ₦50,000");
-  const [risk, setRisk] = useState("Moderate");
-  const [income, setIncome] = useState("");
-  const [goal, setGoal] = useState("Build Emergency Fund");
-  const [aggression, setAggression] = useState(50);
-  const [stressSens, setStressSens] = useState(60);
-  const [notifs, setNotifs] = useState({ decisionAlerts: true, stressIndex: true, bayse: false, goalProgress: true, behavioral: false });
+  const [capitalRange, setCapitalRange] = useState(profile.data?.financial?.capital_range || "₦10,000 - ₦50,000");
+  const [risk, setRisk] = useState(profile.data?.financial?.risk_tolerance || "moderate");
+  const [income, setIncome] = useState(String(profile.data?.financial?.monthly_income || ""));
+  const [goal, setGoal] = useState(profile.data?.preferences?.primary_goal || "Build Emergency Fund");
+  const [aggression, setAggression] = useState(profile.data?.preferences?.decision_aggressiveness || 50);
+  const [stressSens, setStressSens] = useState(profile.data?.preferences?.stress_sensitivity || 60);
+  const [notifs, setNotifs] = useState({
+    decisionAlerts: profile.data?.notifications?.decision_reminders ?? true,
+    stressIndex: profile.data?.notifications?.stress_alerts ?? true,
+    bayse: profile.data?.notifications?.bayse_spike_alerts ?? false,
+    goalProgress: profile.data?.notifications?.weekly_bq_report ?? true,
+    behavioral: false,
+  });
+  const [isSaving, setIsSaving] = useState(false);
 
   const name = user?.displayName || user?.email?.split("@")[0] || "User";
   const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -59,6 +70,52 @@ function ProfileContent() {
     { key: "security", icon: <ShieldCheck className="h-4 w-4" />, label: "Security" },
   ];
 
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    await updateProfile({
+      financial: {
+        capital_range: capitalRange,
+        risk_tolerance: risk as "low" | "moderate" | "high",
+        monthly_income: Number(income) || undefined,
+      },
+    });
+    setIsSaving(false);
+  };
+
+  const handleSavePreferences = async () => {
+    setIsSaving(true);
+    await updateProfile({
+      preferences: {
+        primary_goal: goal,
+        decision_aggressiveness: aggression,
+        stress_sensitivity: stressSens,
+      },
+    });
+    setIsSaving(false);
+  };
+
+  const handleSaveNotifications = async () => {
+    setIsSaving(true);
+    await updateProfile({
+      notifications: {
+        stress_alerts: notifs.stressIndex,
+        weekly_bq_report: notifs.goalProgress,
+        decision_reminders: notifs.decisionAlerts,
+        bayse_spike_alerts: notifs.bayse,
+      },
+    });
+    setIsSaving(false);
+  };
+
+  if (profile.loading) {
+    return (
+      <div className="pb-10">
+        <PageHeader title="Profile" description="Manage your account settings" />
+        <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 animate-pulse h-64" />
+      </div>
+    );
+  }
+
   return (
     <div className="pb-10">
       <PageHeader title="Profile" description="Manage your account settings" />
@@ -71,8 +128,8 @@ function ProfileContent() {
               {initials}
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">{name}</h2>
-              <p className="text-sm text-gray-500">Nigerian Student</p>
+              <h2 className="text-lg font-bold text-gray-900">{profile.data?.name || name}</h2>
+              <p className="text-sm text-gray-500">{profile.data?.department || "Nigerian Student"}</p>
             </div>
           </div>
           <button className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
@@ -81,8 +138,8 @@ function ProfileContent() {
         </div>
         <div className="mt-5 grid grid-cols-3 gap-3">
           <StatPill label="Member Since" value={since} />
-          <StatPill label="Decisions Made" value="24 decisions" />
-          <StatPill label="Success Rate" value="89%" valueColor="text-[#10b981]" />
+          <StatPill label="University" value={profile.data?.university || "Not set"} />
+          <StatPill label="Risk Level" value={(profile.data?.financial?.risk_tolerance || "moderate").toUpperCase()} valueColor="text-[#10b981]" />
         </div>
       </div>
 
@@ -117,9 +174,9 @@ function ProfileContent() {
           <div>
             <p className="mb-2 text-sm font-semibold text-gray-700">Risk Preference</p>
             <div className="flex gap-2">
-              {["Conservative", "Moderate", "Aggressive"].map((opt) => (
+              {["low", "moderate", "high"].map((opt) => (
                 <button key={opt} onClick={() => setRisk(opt)}
-                  className={`flex-1 rounded-xl border py-2 text-sm font-medium transition ${risk === opt ? "border-[#10b981] bg-[#10b981] text-white" : "border-gray-200 bg-gray-50 text-gray-700 hover:border-[#10b981]"}`}>
+                  className={`flex-1 rounded-xl border py-2 text-sm font-medium transition capitalize ${risk === opt ? "border-[#10b981] bg-[#10b981] text-white" : "border-gray-200 bg-gray-50 text-gray-700 hover:border-[#10b981]"}`}>
                   {opt}
                 </button>
               ))}
@@ -130,7 +187,7 @@ function ProfileContent() {
             <input type="number" value={income} onChange={(e) => setIncome(e.target.value)} placeholder="Enter amount"
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:border-[#10b981] focus:ring-1 focus:ring-[#10b981]" />
           </div>
-          <button className="w-full rounded-xl bg-[#10b981] py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b9268]">Save Financial Profile</button>
+          <button onClick={handleSaveProfile} disabled={isSaving} className="w-full rounded-xl bg-[#10b981] py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b9268] disabled:opacity-50">{isSaving ? "Saving..." : "Save Financial Profile"}</button>
         </section>
       )}
 
@@ -167,7 +224,7 @@ function ProfileContent() {
               <span className="shrink-0 text-xs text-gray-400">High</span>
             </div>
           </div>
-          <button className="w-full rounded-xl bg-[#10b981] py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b9268]">Save Preferences</button>
+          <button onClick={handleSavePreferences} disabled={isSaving} className="w-full rounded-xl bg-[#10b981] py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b9268] disabled:opacity-50">{isSaving ? "Saving..." : "Save Preferences"}</button>
         </section>
       )}
 
@@ -192,6 +249,7 @@ function ProfileContent() {
               </div>
             ))}
           </div>
+          <button onClick={handleSaveNotifications} disabled={isSaving} className="mt-4 w-full rounded-xl bg-[#10b981] py-2.5 text-sm font-semibold text-white transition hover:bg-[#0b9268] disabled:opacity-50">{isSaving ? "Saving..." : "Save Notifications"}</button>
         </section>
       )}
 

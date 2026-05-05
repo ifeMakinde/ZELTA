@@ -3,94 +3,16 @@
 import React from "react";
 import PageHeader from "@/components/PageHeader";
 import { CheckCircle, XCircle, Clock } from "lucide-react";
+import { usePortfolio } from "@/hooks/zelta";
 
-// ─── Types ───────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────
 
-type OutcomeStatus = "CORRECT" | "INCORRECT" | "TRACKING";
+type OutcomeStatus = "correct" | "incorrect" | "pending";
 
-interface DecisionRecord {
-  id: number;
-  title: string;
-  date: string;
-  time: string;
-  daysTracked: number;
-  status: OutcomeStatus;
-  verdict: string;
-  amount: number;
-  actualOutcome?: string;
-}
-
-// ─── Mock Data ───────────────────────────────────────────────────
-
-const decisions: DecisionRecord[] = [
-  {
-    id: 1,
-    title: "Side Hustle Reinvestment (Catering)",
-    date: "Apr 12, 2026",
-    time: "07:47 AM",
-    daysTracked: 21,
-    status: "CORRECT",
-    verdict: "INVEST",
-    amount: 15000,
-    actualOutcome: "Returned ₦19,200 — 28% gain",
-  },
-  {
-    id: 2,
-    title: "Impulse Spend — Clothes",
-    date: "Apr 5, 2026",
-    time: "03:12 PM",
-    daysTracked: 28,
-    status: "INCORRECT",
-    verdict: "HOLD",
-    amount: 8500,
-    actualOutcome: "Spent above budget by ₦3,400",
-  },
-  {
-    id: 3,
-    title: "Savings Lock — Hostel Fee",
-    date: "Mar 28, 2026",
-    time: "10:00 AM",
-    daysTracked: 35,
-    status: "CORRECT",
-    verdict: "SAVE",
-    amount: 20000,
-    actualOutcome: "Reached goal 4 days early",
-  },
-  {
-    id: 4,
-    title: "Data Bundle Subscription",
-    date: "Mar 20, 2026",
-    time: "08:55 AM",
-    daysTracked: 14,
-    status: "TRACKING",
-    verdict: "HOLD",
-    amount: 3200,
-  },
-  {
-    id: 5,
-    title: "Reselling (Electronics)",
-    date: "Mar 10, 2026",
-    time: "02:30 PM",
-    daysTracked: 52,
-    status: "CORRECT",
-    verdict: "INVEST",
-    amount: 12000,
-    actualOutcome: "Net ₦4,800 profit after expenses",
-  },
-];
-
-// ─── Performance Stats ────────────────────────────────────────────
-
-const totalDecisions = decisions.length;
-const correctDecisions = decisions.filter((d) => d.status === "CORRECT").length;
-const zeltaAccuracy = Math.round((correctDecisions / totalDecisions) * 100);
-const avgDecisionScore = 1.72;
-const valueProtected = 23900;
-
-// ─── Sub-components ───────────────────────────────────────────────
+// ─── Sub-components ──────────────────────────────────────
 
 function StatusBadge({ status }: { status: OutcomeStatus }) {
-  if (status === "CORRECT") {
+  if (status === "correct") {
     return (
       <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
         <CheckCircle className="h-3.5 w-3.5" />
@@ -98,7 +20,8 @@ function StatusBadge({ status }: { status: OutcomeStatus }) {
       </span>
     );
   }
-  if (status === "INCORRECT") {
+
+  if (status === "incorrect") {
     return (
       <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
         <XCircle className="h-3.5 w-3.5" />
@@ -106,11 +29,36 @@ function StatusBadge({ status }: { status: OutcomeStatus }) {
       </span>
     );
   }
+
   return (
     <span className="flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-600">
       <Clock className="h-3.5 w-3.5" />
       TRACKING
     </span>
+  );
+}
+
+function StatusIcon({ status }: { status: OutcomeStatus }) {
+  if (status === "correct") {
+    return (
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100">
+        <CheckCircle className="h-5 w-5 text-green-500" />
+      </div>
+    );
+  }
+
+  if (status === "incorrect") {
+    return (
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100">
+        <XCircle className="h-5 w-5 text-red-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100">
+      <Clock className="h-5 w-5 text-orange-500" />
+    </div>
   );
 }
 
@@ -120,115 +68,15 @@ function VerdictPill({ verdict }: { verdict: string }) {
     SAVE: "bg-blue-50 text-blue-700",
     HOLD: "bg-gray-100 text-gray-600",
   };
+
   return (
     <span
-      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${colors[verdict] ?? "bg-gray-100 text-gray-500"}`}
+      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
+        colors[verdict] ?? "bg-gray-100 text-gray-500"
+      }`}
     >
       {verdict}
     </span>
-  );
-}
-
-function StatusIcon({ status }: { status: OutcomeStatus }) {
-  if (status === "CORRECT")
-    return (
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100">
-        <CheckCircle className="h-5 w-5 text-green-500" />
-      </div>
-    );
-  if (status === "INCORRECT")
-    return (
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100">
-        <XCircle className="h-5 w-5 text-red-500" />
-      </div>
-    );
-  return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100">
-      <Clock className="h-5 w-5 text-orange-500" />
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────
-
-export default function DecisionHistoryPage() {
-  return (
-    <div className="pb-10">
-      <PageHeader
-        title="Decision History"
-        description="Every ZELTA recommendation logged with outcome tracking"
-      />
-
-      {/* BQ Performance Card */}
-      <div className="mt-6 rounded-2xl bg-green-50 p-5 lg:p-6">
-        <h2 className="mb-5 font-bold text-gray-800">Your BQ Performance</h2>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard label="Total Decisions" value={String(totalDecisions)} />
-          <StatCard
-            label="ZELTA Accuracy"
-            value={`${zeltaAccuracy}%`}
-            valueColor="text-[#10b981]"
-          />
-          <StatCard
-            label="Avg Decision Score"
-            value={`${avgDecisionScore}/5.0`}
-          />
-          <StatCard
-            label="Value Protected"
-            value={`₦${valueProtected.toLocaleString()}`}
-            valueColor="text-[#10b981]"
-          />
-        </div>
-      </div>
-
-      {/* Timeline */}
-      <div className="mt-8">
-        <h2 className="mb-4 text-xl font-bold text-gray-800">Timeline</h2>
-
-        <div className="space-y-3">
-          {decisions.map((decision) => (
-            <div
-              key={decision.id}
-              className="flex items-start gap-4 rounded-2xl bg-green-50 p-4 lg:p-5"
-            >
-              <StatusIcon status={decision.status} />
-
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 text-sm lg:text-base">
-                      {decision.title}
-                    </h3>
-                    <p className="mt-0.5 text-xs text-gray-500">
-                      {decision.date} • {decision.time}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <StatusBadge status={decision.status} />
-                    <span className="text-xs text-gray-400">
-                      {decision.daysTracked} days tracked
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <VerdictPill verdict={decision.verdict} />
-                  <span className="text-sm font-semibold text-gray-800">
-                    ₦{decision.amount.toLocaleString()}
-                  </span>
-                  {decision.actualOutcome && (
-                    <span className="text-xs text-gray-500">
-                      → {decision.actualOutcome}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -247,6 +95,165 @@ function StatCard({
       <p className={`mt-1 text-xl font-bold lg:text-2xl ${valueColor}`}>
         {value}
       </p>
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────
+
+export default function DecisionHistoryPage() {
+  const portfolio = usePortfolio();
+
+  if (portfolio.loading) {
+    return (
+      <div className="pb-10">
+        <PageHeader
+          title="Decision History"
+          description="Every ZELTA recommendation logged with outcome tracking"
+        />
+        <div className="mt-6 h-64 animate-pulse rounded-2xl border border-gray-100 bg-white p-6" />
+      </div>
+    );
+  }
+
+  if (portfolio.error || !portfolio.data) {
+    return (
+      <div className="pb-10">
+        <PageHeader
+          title="Decision History"
+          description="Every ZELTA recommendation logged with outcome tracking"
+        />
+        <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-red-700">
+          Failed to load portfolio data. {portfolio.error}
+        </div>
+      </div>
+    );
+  }
+
+  const { metrics, recent_decisions: decisions } = portfolio.data;
+
+  return (
+    <div className="pb-10">
+      <PageHeader
+        title="Decision History"
+        description="Every ZELTA recommendation logged with outcome tracking"
+      />
+
+      {/* Performance */}
+      <div className="mt-6 rounded-2xl bg-green-50 p-5 lg:p-6">
+        <h2 className="mb-5 font-bold text-gray-800">
+          Your BQ Performance
+        </h2>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            label="Total Decisions"
+            value={String(metrics.total_decisions)}
+          />
+          <StatCard
+            label="ZELTA Accuracy"
+            value={`${Math.round(metrics.accuracy_rate * 100)}%`}
+            valueColor="text-[#10b981]"
+          />
+          <StatCard
+            label="Avg Decision Score"
+            value={`${metrics.average_decision_score.toFixed(2)}/5.0`}
+          />
+          <StatCard
+            label="Net P&L"
+            value={`₦${metrics.net_pnl.toLocaleString()}`}
+            valueColor={
+              metrics.net_pnl > 0 ? "text-[#10b981]" : "text-red-500"
+            }
+          />
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="mt-8">
+        <h2 className="mb-4 text-xl font-bold text-gray-800">
+          Timeline
+        </h2>
+
+        {decisions.length === 0 ? (
+          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
+            <p className="text-gray-500">
+              No decisions logged yet. Start making decisions to build your track record!
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {decisions.map((decision) => {
+              const status =
+                (decision.outcome_label?.toLowerCase() as OutcomeStatus) ||
+                "pending";
+
+              const daysTracked =
+                decision.resolved_at
+                  ? Math.floor(
+                      (new Date(decision.resolved_at).getTime() -
+                        new Date(decision.created_at).getTime()) /
+                        (1000 * 60 * 60 * 24)
+                    )
+                  : null;
+
+              return (
+                <div
+                  key={decision.id}
+                  className="flex items-start gap-4 rounded-2xl bg-green-50 p-4 lg:p-5"
+                >
+                  <StatusIcon status={status} />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900 lg:text-base">
+                          {decision.category || "Decision"}
+                        </h3>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {new Date(
+                            decision.created_at
+                          ).toLocaleDateString()}{" "}
+                          • {decision.rationale}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1.5">
+                        <StatusBadge status={status} />
+                        {daysTracked !== null && (
+                          <span className="text-xs text-gray-400">
+                            {daysTracked} days tracked
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <VerdictPill verdict={decision.verdict} />
+
+                      <span className="text-sm font-semibold text-gray-800">
+                        ₦{decision.amount.toLocaleString()}
+                      </span>
+
+                      {decision.return_amount !== null && (
+                        <span className="text-xs text-gray-500">
+                          →{" "}
+                          {decision.return_percentage &&
+                          decision.return_percentage > 0
+                            ? "+"
+                            : ""}
+                          ₦{decision.return_amount.toLocaleString()} (
+                          {decision.return_percentage?.toFixed(1) || "0"}%)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
