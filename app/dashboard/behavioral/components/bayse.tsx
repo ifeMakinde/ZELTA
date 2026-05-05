@@ -13,10 +13,10 @@ export default function Bayse() {
 
   if (loading) return <LoadingState text="Loading Bayse snapshot..." />;
 
-  const crowdFear = Math.round(Number(data.bayse_crowd_fear ?? 0) * 100);
-  const zeltaModel = Math.round(Number(data.bayse_zelta_model ?? 0) * 100);
+  const crowdFear = Number(data.bayse_crowd_fear ?? 0);
+  const zeltaModel = Number(data.bayse_zelta_model ?? 0);
   const gapRaw = Number(data.bayse_gap ?? 0);
-  const gap = Math.round(Math.abs(gapRaw) * 100);
+  const gap = Math.abs(gapRaw) * 100;
 
   const comparison =
     crowdFear > zeltaModel
@@ -40,19 +40,19 @@ export default function Bayse() {
           <div className="mt-4 flex flex-col gap-6 sm:flex-row sm:gap-10">
             <div>
               <p className="text-sm font-light text-gray-500">Bayse Crowd Fear</p>
-              <p className="text-3xl font-bold text-orange-400">{crowdFear}%</p>
+              <p className="text-3xl font-bold text-orange-400">{crowdFear.toFixed(2)}%</p>
             </div>
 
             <div>
               <p className="text-sm font-light text-gray-500">
                 ZELTA Relational Model
               </p>
-              <p className="text-3xl font-bold text-green-500">{zeltaModel}%</p>
+              <p className="text-3xl font-bold text-green-500">{zeltaModel.toFixed(2)}%</p>
             </div>
           </div>
 
           <p className="mt-4 text-sm text-gray-500">
-            The Bayse crowd was {gap}% {comparison} the data warranted. This is
+            The Bayse crowd was {gap.toFixed(2)}% {comparison} the data warranted. This is
             the behavioral panic gap that ZELTA corrects.
           </p>
         </div>
