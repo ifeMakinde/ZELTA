@@ -1,32 +1,52 @@
 "use client";
 
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_APIKEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTHDOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-};
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
 
-const hasFirebaseConfig =
-  !!firebaseConfig.apiKey &&
-  !!firebaseConfig.authDomain &&
-  !!firebaseConfig.projectId &&
-  !!firebaseConfig.storageBucket &&
-  !!firebaseConfig.messagingSenderId &&
-  !!firebaseConfig.appId;
+function getFirebaseConfig() {
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_APIKEY;
+  const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTHDOMAIN;
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECTID;
+  const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  const messagingSenderId = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID;
+  const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
+  const measurementId = process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID;
 
-const app = hasFirebaseConfig
-  ? getApps().length
-    ? getApp()
-    : initializeApp(firebaseConfig)
-  : null;
+  if (
+    !apiKey ||
+    !authDomain ||
+    !projectId ||
+    !storageBucket ||
+    !messagingSenderId ||
+    !appId
+  ) {
+    return null;
+  }
 
-const auth = app ? getAuth(app) : null;
+  return {
+    apiKey,
+    authDomain,
+    projectId,
+    storageBucket,
+    messagingSenderId,
+    appId,
+    measurementId,
+  };
+}
 
-export { app, auth };
+export function getFirebaseAuth() {
+  if (typeof window === "undefined") return null;
+
+  if (auth) return auth;
+
+  const config = getFirebaseConfig();
+  if (!config) return null;
+
+  app = getApps().length ? getApp() : initializeApp(config);
+  auth = getAuth(app);
+
+  return auth;
+}
