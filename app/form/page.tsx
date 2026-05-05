@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/Button";
@@ -34,8 +35,9 @@ const RISK_MAP: Record<string, "low" | "moderate" | "high"> = {
   Aggressive: "high",
 };
 
-function Page() {
-  const navigate = useRouter();
+export default function Page() {
+  const router = useRouter();
+
   const [name, setName] = useState("");
   const [selectedOptions, setSelectedOptions] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -47,41 +49,53 @@ function Page() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!selectedOptions[0] || !selectedOptions[1] || !selectedOptions[2]) {
+      setError("Please complete all sections before continuing.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
     try {
-      // Save onboarding data to the profile before entering dashboard
       await apiFetch("/api/profile", {
         method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           name: name.trim() || undefined,
           financial: {
-            capital_range: selectedOptions[0] || null,
+            capital_range: selectedOptions[0],
             risk_tolerance: RISK_MAP[selectedOptions[1]] ?? "moderate",
           },
           preferences: {
-            primary_goal: selectedOptions[2] || null,
+            primary_goal: selectedOptions[2],
           },
         }),
       });
-    } catch {
-      // Non-fatal — profile can be filled in later from the Profile page
-      console.warn("[Form] Could not save onboarding profile, continuing...");
+    } catch (err) {
+      console.warn("[Form] Profile save failed, continuing...");
     } finally {
       setSubmitting(false);
-      navigate.push("/dashboard");
+
+      // ✅ IMPORTANT FIXES
+      setTimeout(() => {
+        router.replace("/dashboard");
+        router.refresh(); // forces middleware re-check
+      }, 150); // small delay for cookie/session sync
     }
   };
 
   return (
-    <section className="min-h-screen mx-auto w-[90%] md:w-[40%] lg:w-[30%] space-y-5">
+    <section className="mx-auto min-h-screen w-[90%] space-y-5 md:w-[40%] lg:w-[30%]">
       <div className="mt-4 p-3 text-center">
-        <h2 className="font-bold text-[22px] lg:text-[26px] text-[#10b981] pb-1">
+        <h2 className="pb-1 text-[22px] font-bold text-[#10b981] lg:text-[26px]">
           ZELTA
         </h2>
-        <p className="text-[14px] lg:text-base tracking-wide">
-          {`Let's get to know you`}
+        <p className="text-[14px] tracking-wide lg:text-base">
+          Let&apos;s get to know you
         </p>
       </div>
 
@@ -94,26 +108,35 @@ function Page() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Enter your name"
-            className="w-full py-1.5 px-10 bg-transparent border border-gray-300 focus:border-green-500 focus:outline-none rounded-xl focus:outline-green-300"
+            className="w-full rounded-xl border border-gray-300 bg-transparent px-6 py-2 focus:border-green-500 focus:outline-none"
           />
         </div>
 
-        {formSections.map((section, idx) => (
-          <div key={idx} className="mb-4">
-            <h3 className="mb-1 font-semibold text-[14px] lg:text-base">
+        {formSections.map((section) => (
+          <div key={section.id} className="mb-4">
+            <h3 className="mb-1 text-[14px] font-semibold lg:text-base">
               {section.heading}
             </h3>
-            <ul className="flex flex-col justify-center gap-2.5 w-full font-medium text-[14px]">
-              {section.options.map((option, optIdx) => {
+
+            <ul className="flex w-full flex-col gap-2.5 text-[14px] font-medium">
+              {section.options.map((option) => {
                 const isActive = selectedOptions[section.id] === option;
+
                 return (
                   <li
-                    key={optIdx}
+                    key={option}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleSelect(section.id, option)}
-                    className={`cursor-pointer rounded-xl py-1.5 px-8 bg-gray-50 border transition-colors ${
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        handleSelect(section.id, option);
+                      }
+                    }}
+                    className={`cursor-pointer rounded-xl border px-6 py-2 transition ${
                       isActive
-                        ? "border-green-500 bg-green-50 text-green-700 font-semibold"
-                        : "border-gray-300"
+                        ? "border-green-500 bg-green-50 font-semibold text-green-700"
+                        : "border-gray-300 bg-gray-50"
                     }`}
                   >
                     {option}
@@ -124,12 +147,11 @@ function Page() {
           </div>
         ))}
 
-        {error && (
-          <p className="text-red-500 text-sm mb-3">{error}</p>
-        )}
+        {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
 
         <Button
-          className="bg-[#10b981] text-center p-2 rounded-xl w-full text-white mb-4 disabled:opacity-50"
+          type="submit"
+          className="mb-4 w-full rounded-xl bg-[#10b981] p-2 text-white disabled:opacity-50"
           disabled={submitting}
         >
           {submitting ? "Saving..." : "Continue to Dashboard"}
@@ -138,5 +160,3 @@ function Page() {
     </section>
   );
 }
-
-export default Page;

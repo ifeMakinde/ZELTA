@@ -1,55 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 
-/**
- * Routes that require authentication.
- * Any path starting with these prefixes will be protected.
- */
-const PROTECTED_PREFIXES = ["/dashboard", "/form"];
-
-/**
- * Routes that authenticated users should NOT access
- * (redirect them to the dashboard instead).
- */
+const PROTECTED_PREFIXES = ["/dashboard"];
 const AUTH_ONLY_ROUTES = ["/login", "/sign-up"];
 
 /**
- * The cookie name Firebase Auth sets when a user is signed in.
- * Firebase stores the current user in IndexedDB on the client,
- * but it also sets a cookie we can check server-side as a lightweight
- * signal — we validate fully on the client and in API calls via Bearer token.
- *
- * Firebase sets a cookie named after the project:
- *   firebase:authUser:<API_KEY>:[DEFAULT]
- * Since we can't read that from middleware without the API key at build time,
- * we use a simpler approach: check for any cookie that starts with "firebase:"
- * or fall back to a custom session indicator cookie we set on login.
- *
- * The real security is enforced server-side via Firebase Admin + Bearer token
- * in every API call. This middleware only handles UX redirects.
+ * 🔐 Simple cookie-based auth check
  */
 function isAuthenticated(request: NextRequest): boolean {
-  // Check for Firebase auth cookies — Firebase sets cookies with the format:
-  // firebase:authUser:<apiKey>:[DEFAULT]
-  // We also check for a simpler custom auth signal cookie.
-  const cookies = request.cookies;
-
-  for (const [name] of cookies) {
-    if (name.startsWith("firebase:authUser:")) {
-      return true;
-    }
-  }
-
-  // Also check our own lightweight session marker (set after successful login)
-  const sessionCookie = cookies.get("zelta_session");
-  if (sessionCookie?.value === "1") {
-    return true;
-  }
-
-  return false;
+  const sessionCookie = request.cookies.get("zelta_session");
+  return sessionCookie?.value === "1";
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const authenticated = isAuthenticated(request);
 
   const isProtected = PROTECTED_PREFIXES.some((prefix) =>
     pathname.startsWith(prefix)
@@ -59,30 +24,47 @@ export function middleware(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(route + "/")
   );
 
-  // Unauthenticated user trying to access a protected route → send to /login
-  if (isProtected && !isAuthenticated(request)) {
+  /**
+   * 🚫 BLOCK unauthenticated access to protected routes
+   */
+  if (isProtected && !authenticated) {
     const loginUrl = new URL("/login", request.url);
-    // Preserve the original destination so we can redirect back after login
+
+    // Preserve where user wanted to go
     loginUrl.searchParams.set("from", pathname);
+
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated user trying to access login/sign-up → send to dashboard
-  if (isAuthRoute && isAuthenticated(request)) {
+  /**
+   * 🚫 Prevent logged-in users from seeing login/signup again
+   */
+  if (isAuthRoute && authenticated) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  return NextResponse.next();
+  /**
+   * ✅ Allow request
+   */
+  const response = NextResponse.next();
+
+  /**
+   * 🧠 Prevent caching issues (VERY IMPORTANT)
+   * Avoid stale auth state in Next.js edge
+   */
+  response.headers.set("Cache-Control", "no-store");
+
+  return response;
 }
 
 export const config = {
-  /*
-   * Match all routes EXCEPT:
-   * - Next.js internals (_next/static, _next/image)
-   * - Public static files (favicon, images, etc.)
-   * - API routes (handled by the backend)
-   */
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|public/|api/).*)",
+    /*
+     * Match everything except:
+     * - Next internals
+     * - static files
+     * - API routes
+     */
+    "/((?!_next/static|_next/image|favicon.ico|public|api).*)",
   ],
 };
