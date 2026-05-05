@@ -102,12 +102,12 @@ export default function StressIndexCard({
       <div className="flex gap-3">
         <MiniStat
           title="Bayse Crowd"
-          value={`${Math.floor(crowd_yes) * 100}%`}
+          value={`${Math.floor(crowd_yes ?? 0) * 100}%`}
           color="orange"
         />
         <MiniStat
           title="Zelta Model"
-          value={`${Math.floor(market_probability) * 100}%`}
+          value={`${Math.floor(market_probability ?? 0) * 100}%`}
           color="green"
         />
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { CreditCard, Target, Bell, ShieldCheck, ChevronRight, LogOut } from "lucide-react";
@@ -42,20 +42,42 @@ function ProfileContent() {
     searchParams.get("tab") === "settings" ? "notifications" : "profile"
   );
 
-  const [capitalRange, setCapitalRange] = useState(profile.data?.financial?.capital_range || "₦10,000 - ₦50,000");
-  const [risk, setRisk] = useState(profile.data?.financial?.risk_tolerance || "moderate");
-  const [income, setIncome] = useState(String(profile.data?.financial?.monthly_income || ""));
-  const [goal, setGoal] = useState(profile.data?.preferences?.primary_goal || "Build Emergency Fund");
-  const [aggression, setAggression] = useState(profile.data?.preferences?.decision_aggressiveness || 50);
-  const [stressSens, setStressSens] = useState(profile.data?.preferences?.stress_sensitivity || 60);
+  // Initialize from profile data once loaded — avoids stale empty defaults
+  const [capitalRange, setCapitalRange] = useState("₦10,000 - ₦50,000");
+  const [risk, setRisk] = useState<"low" | "moderate" | "high">("moderate");
+  const [income, setIncome] = useState("");
+  const [goal, setGoal] = useState("Build Emergency Fund");
+  const [aggression, setAggression] = useState(50);
+  const [stressSens, setStressSens] = useState(60);
   const [notifs, setNotifs] = useState({
-    decisionAlerts: profile.data?.notifications?.decision_reminders ?? true,
-    stressIndex: profile.data?.notifications?.stress_alerts ?? true,
-    bayse: profile.data?.notifications?.bayse_spike_alerts ?? false,
-    goalProgress: profile.data?.notifications?.weekly_bq_report ?? true,
+    decisionAlerts: true,
+    stressIndex: true,
+    bayse: false,
+    goalProgress: true,
     behavioral: false,
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [synced, setSynced] = useState(false);
+
+  // Sync local state from API once profile loads (runs once)
+  useEffect(() => {
+    if (profile.data && !synced) {
+      setCapitalRange(profile.data.financial?.capital_range || "₦10,000 - ₦50,000");
+      setRisk(profile.data.financial?.risk_tolerance || "moderate");
+      setIncome(String(profile.data.financial?.monthly_income || ""));
+      setGoal(profile.data.preferences?.primary_goal || "Build Emergency Fund");
+      setAggression(profile.data.preferences?.decision_aggressiveness ?? 50);
+      setStressSens(profile.data.preferences?.stress_sensitivity ?? 60);
+      setNotifs({
+        decisionAlerts: profile.data.notifications?.decision_reminders ?? true,
+        stressIndex: profile.data.notifications?.stress_alerts ?? true,
+        bayse: profile.data.notifications?.bayse_spike_alerts ?? false,
+        goalProgress: profile.data.notifications?.weekly_bq_report ?? true,
+        behavioral: false,
+      });
+      setSynced(true);
+    }
+  }, [profile.data, synced]);
 
   const name = user?.displayName || user?.email?.split("@")[0] || "User";
   const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -174,7 +196,7 @@ function ProfileContent() {
           <div>
             <p className="mb-2 text-sm font-semibold text-gray-700">Risk Preference</p>
             <div className="flex gap-2">
-              {["low", "moderate", "high"].map((opt) => (
+              {(["low", "moderate", "high"] as const).map((opt) => (
                 <button key={opt} onClick={() => setRisk(opt)}
                   className={`flex-1 rounded-xl border py-2 text-sm font-medium transition capitalize ${risk === opt ? "border-[#10b981] bg-[#10b981] text-white" : "border-gray-200 bg-gray-50 text-gray-700 hover:border-[#10b981]"}`}>
                   {opt}

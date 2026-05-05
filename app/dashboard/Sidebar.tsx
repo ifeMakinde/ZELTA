@@ -6,49 +6,47 @@ import {
   Brain,
   Sparkles,
   MessageSquare,
-  // User,
-  // History,
+  User,
+  History,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const navItems = [
   {
-    icon: <Home className=" stroke-2 lg:stroke-1 size-6" />,
+    icon: <Home className="stroke-2 lg:stroke-1 size-6" />,
     label: "Home",
     href: "/dashboard",
   },
   {
-    icon: <Wallet className=" stroke-2 lg:stroke-1 size-6" />,
+    icon: <Wallet className="stroke-2 lg:stroke-1 size-6" />,
     label: "Wallet",
     href: "/dashboard/wallet",
   },
   {
-    icon: <Brain className=" stroke-2 lg:stroke-1 size-6" />,
+    icon: <Brain className="stroke-2 lg:stroke-1 size-6" />,
     label: "Behavioral",
     href: "/dashboard/behavioral",
   },
   {
-    icon: <Sparkles className=" stroke-2 lg:stroke-1 size-6" />,
+    icon: <Sparkles className="stroke-2 lg:stroke-1 size-6" />,
     label: "Simulation",
     href: "/dashboard/simulations",
   },
   {
-    icon: <MessageSquare className=" stroke-2 lg:stroke-1 size-6" />,
+    icon: <MessageSquare className="stroke-2 lg:stroke-1 size-6" />,
     label: "Co-Pilot",
     href: "/dashboard/co-pilot",
   },
-  // {
-  //   icon: (
-  //     <History className=" stroke-2 lg:stroke-1 active:fill-green-500 size-6 " />
-  //   ),
-  //   label: "History",
-  //   href: "/dashboard/history",
-  // },
-  // {
-  //   icon: <User className=" stroke-2 lg:stroke-1size-6" />,
-  //   label: "Profile",
-  //   href: "/dashboard/profile",
-  // },
+  {
+    icon: <History className="stroke-2 lg:stroke-1 size-6" />,
+    label: "History",
+    href: "/dashboard/history",
+  },
+  {
+    icon: <User className="stroke-2 lg:stroke-1 size-6" />,
+    label: "Profile",
+    href: "/dashboard/profile",
+  },
 ];
 
 export default function Sidebar() {

@@ -67,8 +67,8 @@ export default function DecisionScoreCard({
         <ArrowDownRight />
       </div>
 
-      <Bar label="Rational" value={rational_pct} color="green" />
-      <Bar label="Impulse" value={behavioral_pct} color="orange" />
+      <Bar label="Rational" value={rational_pct ?? 0} color="green" />
+      <Bar label="Impulse" value={behavioral_pct ?? 0} color="orange" />
 
       <div className="bg-green-50 text-[#444] p-3 rounded-lg text-sm">
         <strong>Confidence Gap: {confidence_gap}%</strong> –{" "}

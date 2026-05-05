@@ -351,6 +351,13 @@ export interface CopilotResponse {
   sources?: string[];
 }
 
+// Wrapping envelope returned by POST /api/copilot
+// apiFetch unwraps this → gives CopilotResponse directly
+export interface CopilotAPIResponse {
+  success: boolean;
+  data: CopilotResponse;
+}
+
 // ─── /api/simulation/* ───────────────────────────────────────────
 
 export type SimulationType = "side_hustle" | "savings";
@@ -378,7 +385,7 @@ export interface SimulationResponse {
   success: boolean;
   simulation_type: SimulationType;
   data: {
-    // Common fields
+    [key: string]: unknown;     // backend may return extra fields
     recommendation?: string;
     confidence_score?: number;
     risk_level?: string;
@@ -390,6 +397,9 @@ export interface SimulationResponse {
       medium: number;
       high: number;
     };
+    decision_score?: number;
+    kelly_fraction?: number;
+    plain_english?: string;
     // Savings specific
     weeks_to_target?: number;
     weekly_trajectory?: Array<{

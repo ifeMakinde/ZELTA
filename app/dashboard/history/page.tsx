@@ -242,7 +242,7 @@ export default function DecisionHistoryPage() {
                           decision.return_percentage > 0
                             ? "+"
                             : ""}
-                          ₦{decision.return_amount.toLocaleString()} (
+                          ₦{(decision.return_amount ?? 0).toLocaleString()} (
                           {decision.return_percentage?.toFixed(1) || "0"}%)
                         </span>
                       )}

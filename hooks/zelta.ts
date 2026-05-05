@@ -16,25 +16,27 @@ import type {
   SavingsSimRequest,
   SimulationResponse,
   WalletSummary,
+  WalletResponse,
   CopilotRequest,
   CopilotResponse,
+  CopilotAPIResponse,
   UserProfile,
-  PortfolioSummary,
   ProfileResponse,
+  PortfolioSummary,
   PortfolioResponse,
   LogDecisionRequest,
   UpdateOutcomeRequest,
   UpdateProfileRequest,
 } from "@/types/zelta";
 
-// --- DEVTOOLS DEBUGGER SETUP ---
+// ─── DevTools debug bridge ───────────────────────────────────────
 declare global {
   interface Window {
     __ZELTA_DEBUG__: {
-      state: Record<string, any>;
+      state: Record<string, unknown>;
       enableLogs: () => void;
       disableLogs: () => void;
-      logHistory: Array<{ timestamp: Date; hook: string; state: any }>;
+      logHistory: Array<{ timestamp: Date; hook: string; state: unknown }>;
     };
   }
 }
@@ -54,32 +56,28 @@ if (typeof window !== "undefined" && !window.__ZELTA_DEBUG__) {
   };
 }
 
-const trackDebugState = (hookName: string, state: any) => {
+function trackDebugState(hookName: string, state: unknown) {
   if (typeof window === "undefined") return;
-
   window.__ZELTA_DEBUG__.state[hookName] = state;
-  window.__ZELTA_DEBUG__.logHistory.push({
-    timestamp: new Date(),
-    hook: hookName,
-    state: { ...state },
-  });
-
+  window.__ZELTA_DEBUG__.logHistory.push({ timestamp: new Date(), hook: hookName, state });
   if (window.__ZELTA_DEBUG__.logHistory.length > 200) {
     window.__ZELTA_DEBUG__.logHistory.shift();
   }
-
   if (localStorage.getItem("ZELTA_DEBUG_LOGS") === "true") {
-    console.log(`%c[Zelta Debug] %c${hookName} updated:`, "color: #00aaff; font-weight: bold", "color: inherit", state);
+    console.log(`%c[Zelta] %c${hookName}`, "color:#00aaff;font-weight:bold", "color:inherit", state);
   }
-};
-// -------------------------------
+}
 
-interface HookState<T> {
+// ─── Shared state shape ──────────────────────────────────────────
+export interface HookState<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
 }
 
+// ─── Generic one-shot fetch hook ─────────────────────────────────
+// IMPORTANT: apiFetch already unwraps { success, data: T } envelopes.
+// Never do apiFetch<ProfileResponse>().then(r => r.data) — apiFetch returns T directly.
 function useAsyncData<T>(
   fetcher: () => Promise<T>,
   debugKey?: string
@@ -93,77 +91,99 @@ function useAsyncData<T>(
   const fetcherRef = useRef(fetcher);
   const mountedRef = useRef(true);
 
-  useEffect(() => {
-    if (debugKey) trackDebugState(debugKey, state);
-  }, [state, debugKey]);
-
-  useEffect(() => {
-    fetcherRef.current = fetcher;
-  }, [fetcher]);
+  // Always keep fetcher ref up to date without re-running the effect
+  useEffect(() => { fetcherRef.current = fetcher; });
 
   const run = useCallback(async () => {
     if (!mountedRef.current) return;
-
     setState((s) => ({ ...s, loading: true, error: null }));
-
     try {
       const data = await fetcherRef.current();
-
-      if (data === null || data === undefined) {
-        throw new Error("Empty response from API");
-      }
-
+      if (data === null || data === undefined) throw new Error("Empty response from API");
       if (mountedRef.current) {
         setState({ data, loading: false, error: null });
+        if (debugKey) trackDebugState(debugKey, { data, loading: false, error: null });
       }
     } catch (err) {
       if (mountedRef.current) {
-        setState({
-          data: null,
-          loading: false,
-          error: (err as Error).message,
-        });
+        const error = (err as Error).message;
+        setState({ data: null, loading: false, error });
+        if (debugKey) trackDebugState(debugKey, { data: null, loading: false, error });
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     mountedRef.current = true;
     run();
-
-    return () => {
-      mountedRef.current = false;
-    };
+    return () => { mountedRef.current = false; };
   }, [run]);
 
   return { ...state, refetch: run };
 }
 
-// --- NORMALIZERS ---
-
-function normalizeBehavioralSnapshot(input: unknown): BehavioralSnapshot | null {
-  if (!input || typeof input !== "object") return null;
-  const raw = input as Record<string, any>;
-  
-  // Checks if data is at root or wrapped in a standard payload key
-  if ("active_bias" in raw) return input as BehavioralSnapshot;
-
-  const candidate = raw.data ?? raw.snapshot ?? raw.result ?? raw.payload ?? null;
-  return candidate as BehavioralSnapshot;
+// ─── Behavioral response normalizers ─────────────────────────────
+// apiFetch already unwraps {success, data} wrappers.
+// These normalizers defensively handle both flat and wrapped shapes.
+function normalizeBehavioralSnapshot(raw: unknown): BehavioralSnapshot {
+  if (!raw || typeof raw !== "object") throw new Error("Invalid snapshot response");
+  const obj = raw as Record<string, unknown>;
+  if ("active_bias" in obj) return obj as unknown as BehavioralSnapshot;
+  const nested = obj.data ?? obj.snapshot ?? obj.result ?? obj.payload;
+  if (nested && typeof nested === "object" && "active_bias" in (nested as object)) {
+    return nested as unknown as BehavioralSnapshot;
+  }
+  throw new Error("Could not parse behavioral snapshot — unexpected shape: " + JSON.stringify(obj).slice(0, 120));
 }
 
-function normalizeBehavioralPattern(input: unknown): BehavioralPattern | null {
-  if (!input || typeof input !== "object") return null;
-  const raw = input as Record<string, any>;
-  
-  if ("weeks" in raw) return input as BehavioralPattern;
-
-  const candidate = raw.data ?? raw.result ?? raw.payload ?? null;
-  return candidate as BehavioralPattern;
+function normalizeBehavioralPattern(raw: unknown): BehavioralPattern {
+  if (!raw || typeof raw !== "object") throw new Error("Invalid pattern response");
+  const obj = raw as Record<string, unknown>;
+  if ("weeks" in obj) return obj as unknown as BehavioralPattern;
+  const nested = obj.data ?? obj.pattern ?? obj.result ?? obj.payload;
+  if (nested && typeof nested === "object" && "weeks" in (nested as object)) {
+    return nested as unknown as BehavioralPattern;
+  }
+  throw new Error("Could not parse behavioral pattern — unexpected shape");
 }
 
-// --- DEFAULTS ---
+// ─── Wallet normalizer ────────────────────────────────────────────
+function normalizeWallet(raw: unknown): WalletSummary {
+  if (!raw || typeof raw !== "object") throw new Error("Invalid wallet response");
+  const obj = raw as Record<string, unknown>;
+  // Direct shape (already unwrapped by apiFetch)
+  if ("total_balance" in obj) return obj as unknown as WalletSummary;
+  // Fallback: envelope survived
+  if ("data" in obj && obj.data && typeof obj.data === "object" && "total_balance" in (obj.data as object)) {
+    return (obj as unknown as WalletResponse).data;
+  }
+  throw new Error("Could not parse wallet response");
+}
 
+// ─── Profile normalizer ────────────────────────────────────────────
+function normalizeProfile(raw: unknown): UserProfile {
+  if (!raw || typeof raw !== "object") throw new Error("Invalid profile response");
+  const obj = raw as Record<string, unknown>;
+  if ("uid" in obj) return obj as unknown as UserProfile;
+  if ("data" in obj && obj.data && typeof obj.data === "object" && "uid" in (obj.data as object)) {
+    return (obj as unknown as ProfileResponse).data;
+  }
+  throw new Error("Could not parse profile response");
+}
+
+// ─── Portfolio normalizer ─────────────────────────────────────────
+function normalizePortfolio(raw: unknown): PortfolioSummary {
+  if (!raw || typeof raw !== "object") throw new Error("Invalid portfolio response");
+  const obj = raw as Record<string, unknown>;
+  if ("metrics" in obj) return obj as unknown as PortfolioSummary;
+  if ("data" in obj && obj.data && typeof obj.data === "object" && "metrics" in (obj.data as object)) {
+    return (obj as unknown as PortfolioResponse).data;
+  }
+  throw new Error("Could not parse portfolio response");
+}
+
+// ─── Default fallbacks ────────────────────────────────────────────
 export const DEFAULT_BEHAVIORAL_SNAPSHOT: BehavioralSnapshot = {
   active_bias: "None",
   confidence: "Unknown",
@@ -198,39 +218,32 @@ export const DEFAULT_BEHAVIORAL_PATTERN: BehavioralPattern = {
   confidence_gap: 0,
 };
 
-// --- FETCHERS ---
-
+// ─── Standalone fetchers (usable outside hooks) ───────────────────
 export async function fetchBehavioralSnapshot(): Promise<BehavioralSnapshot> {
-  const response = await apiFetch<unknown>("/api/behavioral/snapshot");
-  const snapshot = normalizeBehavioralSnapshot(response);
-  if (!snapshot) throw new Error("Could not parse snapshot data structure");
-  return snapshot;
+  const raw = await apiFetch<unknown>("/api/behavioral/snapshot");
+  return normalizeBehavioralSnapshot(raw);
 }
 
 export async function fetchBehavioralPattern(): Promise<BehavioralPattern> {
-  const response = await apiFetch<unknown>("/api/behavioral/pattern");
-  const pattern = normalizeBehavioralPattern(response);
-  if (!pattern) throw new Error("Could not parse pattern data structure");
-  return pattern;
+  const raw = await apiFetch<unknown>("/api/behavioral/pattern");
+  return normalizeBehavioralPattern(raw);
 }
 
-// --- HOOKS ---
+// ═══════════════════════════════════════════════════════════════════
+//  READ HOOKS
+// ═══════════════════════════════════════════════════════════════════
 
-export function useBrain(): HookState<BrainData> & {
-  refetch: (force?: boolean) => void;
-} {
+// ─── /api/brain (30s TTL cache) ───────────────────────────────────
+export function useBrain(): HookState<BrainData> & { refetch: (force?: boolean) => void } {
   const cacheRef = useRef<{ data: BrainData | null; ts: number }>({ data: null, ts: 0 });
-  const [state, setState] = useState<HookState<BrainData>>({
-    data: cacheRef.current.data,
-    loading: !cacheRef.current.data,
-    error: null,
-  });
-
+  const mountedRef = useRef(true);
   const BRAIN_TTL = 30_000;
 
-  useEffect(() => {
-    trackDebugState("useBrain", state);
-  }, [state]);
+  const [state, setState] = useState<HookState<BrainData>>({
+    data: null,
+    loading: true,
+    error: null,
+  });
 
   const fetch = useCallback(async (force = false) => {
     const now = Date.now();
@@ -238,30 +251,34 @@ export function useBrain(): HookState<BrainData> & {
       setState({ data: cacheRef.current.data, loading: false, error: null });
       return;
     }
-
     setState((s) => ({ ...s, loading: true, error: null }));
-
     try {
       const data = await apiFetch<BrainData>("/api/brain");
-      cacheRef.current.data = data;
-      cacheRef.current.ts = Date.now();
-      setState({ data, loading: false, error: null });
+      cacheRef.current = { data, ts: Date.now() };
+      if (mountedRef.current) setState({ data, loading: false, error: null });
+      trackDebugState("useBrain", { data, loading: false, error: null });
     } catch (err) {
-      setState({ data: null, loading: false, error: (err as Error).message });
+      if (mountedRef.current) {
+        setState({ data: null, loading: false, error: (err as Error).message });
+      }
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetch();
+    return () => { mountedRef.current = false; };
   }, [fetch]);
 
   return { ...state, refetch: fetch };
 }
 
+// ─── /api/intelligence ───────────────────────────────────────────
 export function useIntelligence() {
   return useAsyncData<IntelligenceData>(() => apiFetch("/api/intelligence"), "useIntelligence");
 }
 
+// ─── /api/stress (optional polling) ──────────────────────────────
 export function useStress(pollInterval = 0): HookState<StressData> {
   const [state, setState] = useState<HookState<StressData>>({
     data: null,
@@ -269,67 +286,47 @@ export function useStress(pollInterval = 0): HookState<StressData> {
     error: null,
   });
   const activeRef = useRef(true);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const intervalRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    trackDebugState("useStress", state);
-  }, [state]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     activeRef.current = true;
-
     const run = async () => {
       try {
-        abortControllerRef.current = new AbortController();
         const data = await apiFetch<StressData>("/api/stress");
-        if (activeRef.current) setState({ data, loading: false, error: null });
+        if (activeRef.current) {
+          setState({ data, loading: false, error: null });
+          trackDebugState("useStress", { data });
+        }
       } catch (err) {
-        if (activeRef.current && !(err as Error).message.includes("aborted")) {
-          setState({
-            data: null,
-            loading: false,
-            error: (err as Error).message,
-          });
+        if (activeRef.current) {
+          setState({ data: null, loading: false, error: (err as Error).message });
         }
       }
     };
-
     run();
-
-    if (pollInterval > 0) {
-      intervalRef.current = window.setInterval(run, pollInterval);
-    }
-
+    if (pollInterval > 0) intervalRef.current = setInterval(run, pollInterval);
     return () => {
       activeRef.current = false;
-      abortControllerRef.current?.abort();
-      if (intervalRef.current !== null) {
-        window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
   }, [pollInterval]);
 
   return state;
 }
 
+// ─── /api/bayse/markets ──────────────────────────────────────────
 export function useBayseMarkets() {
   return useAsyncData<MarketsData>(() => apiFetch("/api/bayse/markets"), "useBayseMarkets");
 }
 
-export function useBayseSignals(): HookState<BayseSignalsData> & {
-  refetch: () => void;
-} {
+// ─── /api/bayse/stress + /api/bayse/sentiment (parallel) ─────────
+export function useBayseSignals(): HookState<BayseSignalsData> & { refetch: () => void } {
+  const mountedRef = useRef(true);
   const [state, setState] = useState<HookState<BayseSignalsData>>({
     data: null,
     loading: true,
     error: null,
   });
-
-  useEffect(() => {
-    trackDebugState("useBayseSignals", state);
-  }, [state]);
 
   const fetch = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
@@ -338,146 +335,85 @@ export function useBayseSignals(): HookState<BayseSignalsData> & {
         apiFetch<BayseStressData>("/api/bayse/stress"),
         apiFetch<BayseSentimentData>("/api/bayse/sentiment"),
       ]);
-      setState({ data: { stress, sentiment }, loading: false, error: null });
+      if (mountedRef.current) {
+        setState({ data: { stress, sentiment }, loading: false, error: null });
+        trackDebugState("useBayseSignals", { stress, sentiment });
+      }
     } catch (err) {
-      setState({ data: null, loading: false, error: (err as Error).message });
+      if (mountedRef.current) setState({ data: null, loading: false, error: (err as Error).message });
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetch();
+    return () => { mountedRef.current = false; };
   }, [fetch]);
 
   return { ...state, refetch: fetch };
 }
 
+// ─── /api/behavioral/snapshot ────────────────────────────────────
 export function useBehavioralSnapshot() {
   return useAsyncData<BehavioralSnapshot>(fetchBehavioralSnapshot, "useBehavioralSnapshot");
 }
 
+// ─── /api/behavioral/pattern ─────────────────────────────────────
 export function useBehavioralPattern() {
   return useAsyncData<BehavioralPattern>(fetchBehavioralPattern, "useBehavioralPattern");
 }
 
+// ─── /api/wallet ─────────────────────────────────────────────────
 export function useWallet() {
-  return useAsyncData<WalletSummary>(() => apiFetch<WalletSummary>("/api/wallet"), "useWallet");
+  return useAsyncData<WalletSummary>(
+    async () => normalizeWallet(await apiFetch<unknown>("/api/wallet")),
+    "useWallet"
+  );
 }
 
-export function useCopilot() {
-  const [state, setState] = useState<HookState<CopilotResponse>>({
-    data: null,
-    loading: false,
-    error: null,
-  });
-
-  useEffect(() => {
-    trackDebugState("useCopilot", state);
-  }, [state]);
-
-  const runCopilot = useCallback(async (request: CopilotRequest) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
-    try {
-      const data = await apiFetch<CopilotResponse>("/api/copilot", {
-        method: "POST",
-        body: JSON.stringify(request),
-      });
-      setState({ data, loading: false, error: null });
-      return data;
-    } catch (err) {
-      setState({ data: null, loading: false, error: (err as Error).message });
-      return null;
-    }
-  }, []);
-
-  return { ...state, runCopilot };
-}
-
-export function useSideHustleSimulation() {
-  const [state, setState] = useState<HookState<SimulationResponse>>({
-    data: null,
-    loading: false,
-    error: null,
-  });
-
-  useEffect(() => {
-    trackDebugState("useSideHustleSimulation", state);
-  }, [state]);
-
-  const runSimulation = useCallback(async (request: SideHustleSimRequest) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
-    try {
-      const data = await apiFetch<SimulationResponse>("/api/simulation/side-hustle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      });
-      setState({ data, loading: false, error: null });
-    } catch (err) {
-      setState({ data: null, loading: false, error: (err as Error).message });
-    }
-  }, []);
-
-  return { ...state, runSimulation };
-}
-
-export function useSavingsSimulation() {
-  const [state, setState] = useState<HookState<SimulationResponse>>({
-    data: null,
-    loading: false,
-    error: null,
-  });
-
-  useEffect(() => {
-    trackDebugState("useSavingsSimulation", state);
-  }, [state]);
-
-  const runSimulation = useCallback(async (request: SavingsSimRequest) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
-    try {
-      const data = await apiFetch<SimulationResponse>("/api/simulation/savings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      });
-      setState({ data, loading: false, error: null });
-    } catch (err) {
-      setState({ data: null, loading: false, error: (err as Error).message });
-    }
-  }, []);
-
-  return { ...state, runSimulation };
-}
-
+// ─── /api/profile ────────────────────────────────────────────────
 export function useProfile() {
   return useAsyncData<UserProfile>(
-    () => apiFetch<ProfileResponse>("/api/profile").then((res) => res.data),
+    async () => normalizeProfile(await apiFetch<unknown>("/api/profile")),
     "useProfile"
   );
 }
 
+// ─── /api/portfolio ──────────────────────────────────────────────
+export function usePortfolio() {
+  return useAsyncData<PortfolioSummary>(
+    async () => normalizePortfolio(await apiFetch<unknown>("/api/portfolio")),
+    "usePortfolio"
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MUTATION HOOKS
+// ═══════════════════════════════════════════════════════════════════
+
+// ─── /api/profile PATCH ──────────────────────────────────────────
 export function useUpdateProfile() {
-  const [state, setState] = useState<HookState<UserProfile>>({
-    data: null,
-    loading: false,
-    error: null,
-  });
+  const mountedRef = useRef(true);
+  const [state, setState] = useState<HookState<UserProfile>>({ data: null, loading: false, error: null });
 
   useEffect(() => {
-    trackDebugState("useUpdateProfile", state);
-  }, [state]);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
-  const updateProfile = useCallback(async (updates: UpdateProfileRequest) => {
+  const updateProfile = useCallback(async (updates: UpdateProfileRequest): Promise<UserProfile | null> => {
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
-      const response = await apiFetch<ProfileResponse>("/api/profile", {
+      const raw = await apiFetch<unknown>("/api/profile", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
-      setState({ data: response.data, loading: false, error: null });
-      return response.data;
+      const profile = normalizeProfile(raw);
+      if (mountedRef.current) setState({ data: profile, loading: false, error: null });
+      trackDebugState("useUpdateProfile", profile);
+      return profile;
     } catch (err) {
-      setState({ data: null, loading: false, error: (err as Error).message });
+      if (mountedRef.current) setState({ data: null, loading: false, error: (err as Error).message });
       return null;
     }
   }, []);
@@ -485,36 +421,154 @@ export function useUpdateProfile() {
   return { ...state, updateProfile };
 }
 
-export function usePortfolio() {
-  return useAsyncData<PortfolioSummary>(
-    () => apiFetch<PortfolioResponse>("/api/portfolio").then((res) => res.data),
-    "usePortfolio"
-  );
-}
-
-export function useLogDecision() {
-  const [state, setState] = useState<HookState<any>>({
-    data: null,
-    loading: false,
-    error: null,
-  });
+// ─── /api/copilot POST ────────────────────────────────────────────
+export function useCopilot() {
+  const mountedRef = useRef(true);
+  const [state, setState] = useState<HookState<CopilotResponse>>({ data: null, loading: false, error: null });
 
   useEffect(() => {
-    trackDebugState("useLogDecision", state);
-  }, [state]);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
-  const logDecision = useCallback(async (decision: LogDecisionRequest) => {
+  const runCopilot = useCallback(async (request: CopilotRequest): Promise<CopilotResponse | null> => {
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
-      const data = await apiFetch<any>("/api/portfolio/decisions", {
+      // Backend: { success, data: { answer, verdict, ... } }
+      // apiFetch unwraps the outer {success, data} → gives us CopilotResponse directly
+      const raw = await apiFetch<unknown>("/api/copilot", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      // Handle both direct CopilotResponse and nested CopilotAPIResponse
+      let response: CopilotResponse;
+      if (raw && typeof raw === "object" && "answer" in (raw as object)) {
+        response = raw as CopilotResponse;
+      } else if (raw && typeof raw === "object" && "data" in (raw as object)) {
+        response = (raw as CopilotAPIResponse).data;
+      } else {
+        throw new Error("Unexpected copilot response structure");
+      }
+      if (mountedRef.current) {
+        setState({ data: response, loading: false, error: null });
+        trackDebugState("useCopilot", response);
+      }
+      return response;
+    } catch (err) {
+      if (mountedRef.current) setState({ data: null, loading: false, error: (err as Error).message });
+      return null;
+    }
+  }, []);
+
+  return { ...state, runCopilot };
+}
+
+// ─── /api/simulation/side-hustle POST ────────────────────────────
+// NOTE: SimulationResponse is { success, simulation_type, data: {} }
+// The entire object is the response — apiFetch would try to unwrap "data"
+// which would strip simulation_type and success. We use apiFetch<unknown>
+// and cast the full object to SimulationResponse.
+export function useSideHustleSimulation() {
+  const mountedRef = useRef(true);
+  const [state, setState] = useState<HookState<SimulationResponse>>({ data: null, loading: false, error: null });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const runSimulation = useCallback(async (request: SideHustleSimRequest): Promise<SimulationResponse | null> => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const raw = await apiFetch<unknown>("/api/simulation/side-hustle", {
+        method: "POST",
+        body: JSON.stringify(request),
+      });
+      // raw is { success, simulation_type, data: {...} }
+      // apiFetch unwraps "data" key → raw is the inner data object
+      // We need to reconstruct or handle both cases
+      let result: SimulationResponse;
+      if (raw && typeof raw === "object" && "simulation_type" in (raw as object)) {
+        // Full envelope survived (apiFetch didn't unwrap because success is at top level too)
+        result = raw as SimulationResponse;
+      } else {
+        // apiFetch unwrapped data → wrap it back for components
+        result = { success: true, simulation_type: "side_hustle", data: raw as Record<string, unknown> };
+      }
+      if (mountedRef.current) {
+        setState({ data: result, loading: false, error: null });
+        trackDebugState("useSideHustleSimulation", result);
+      }
+      return result;
+    } catch (err) {
+      if (mountedRef.current) setState({ data: null, loading: false, error: (err as Error).message });
+      return null;
+    }
+  }, []);
+
+  return { ...state, runSimulation };
+}
+
+// ─── /api/simulation/savings POST ────────────────────────────────
+export function useSavingsSimulation() {
+  const mountedRef = useRef(true);
+  const [state, setState] = useState<HookState<SimulationResponse>>({ data: null, loading: false, error: null });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const runSimulation = useCallback(async (request: SavingsSimRequest): Promise<SimulationResponse | null> => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const raw = await apiFetch<unknown>("/api/simulation/savings", {
+        method: "POST",
+        body: JSON.stringify(request),
+      });
+      let result: SimulationResponse;
+      if (raw && typeof raw === "object" && "simulation_type" in (raw as object)) {
+        result = raw as SimulationResponse;
+      } else {
+        result = { success: true, simulation_type: "savings", data: raw as Record<string, unknown> };
+      }
+      if (mountedRef.current) {
+        setState({ data: result, loading: false, error: null });
+        trackDebugState("useSavingsSimulation", result);
+      }
+      return result;
+    } catch (err) {
+      if (mountedRef.current) setState({ data: null, loading: false, error: (err as Error).message });
+      return null;
+    }
+  }, []);
+
+  return { ...state, runSimulation };
+}
+
+// ─── /api/portfolio/decisions POST ───────────────────────────────
+export function useLogDecision() {
+  const mountedRef = useRef(true);
+  const [state, setState] = useState<HookState<string>>({ data: null, loading: false, error: null });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const logDecision = useCallback(async (decision: LogDecisionRequest): Promise<string | null> => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      // Backend returns a plain string (decision ID)
+      const data = await apiFetch<string>("/api/portfolio/decisions", {
+        method: "POST",
         body: JSON.stringify(decision),
       });
-      setState({ data, loading: false, error: null });
+      if (mountedRef.current) setState({ data, loading: false, error: null });
+      trackDebugState("useLogDecision", { decisionId: data });
       return data;
     } catch (err) {
-      setState({ data: null, loading: false, error: (err as Error).message });
+      if (mountedRef.current) setState({ data: null, loading: false, error: (err as Error).message });
       return null;
     }
   }, []);
@@ -522,29 +576,28 @@ export function useLogDecision() {
   return { ...state, logDecision };
 }
 
+// ─── /api/portfolio/decisions/outcome PATCH ──────────────────────
 export function useRecordOutcome() {
-  const [state, setState] = useState<HookState<any>>({
-    data: null,
-    loading: false,
-    error: null,
-  });
+  const mountedRef = useRef(true);
+  const [state, setState] = useState<HookState<string>>({ data: null, loading: false, error: null });
 
   useEffect(() => {
-    trackDebugState("useRecordOutcome", state);
-  }, [state]);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
-  const recordOutcome = useCallback(async (outcome: UpdateOutcomeRequest) => {
+  const recordOutcome = useCallback(async (outcome: UpdateOutcomeRequest): Promise<string | null> => {
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
-      const data = await apiFetch<any>("/api/portfolio/decisions/outcome", {
+      const data = await apiFetch<string>("/api/portfolio/decisions/outcome", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(outcome),
       });
-      setState({ data, loading: false, error: null });
+      if (mountedRef.current) setState({ data, loading: false, error: null });
+      trackDebugState("useRecordOutcome", { result: data });
       return data;
     } catch (err) {
-      setState({ data: null, loading: false, error: (err as Error).message });
+      if (mountedRef.current) setState({ data: null, loading: false, error: (err as Error).message });
       return null;
     }
   }, []);

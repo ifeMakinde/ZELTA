@@ -107,10 +107,10 @@ function Dashboard() {
           />
 
           <WeeklyVerdictCard
-            invest_ngn={invest_ngn}
+            invest_ngn={invest_ngn ?? 0}
             save_ngn={save_ngn}
             hold_ngn={hold_ngn}
-            allocation_plain={allocation_plain}
+            allocation_plain={allocation_plain ?? ""}
           />
         </main>
       </section>
